@@ -1,0 +1,122 @@
+# Photo Mecha Battle
+
+現実世界の物体を撮影し、写真から抽出したオブジェクトの特徴をもとにメカを生成し、戦術セットとチーム編成でオートバトルを行う iOS / Android 向けスマートフォンゲーム。
+
+## コア体験
+
+1. 現実世界で面白い被写体を探す
+2. 写真から自分だけのメカを生成する
+3. 機体と戦術セットを組み合わせる
+4. チームを編成してオートバトルを行う
+5. バトルログを見て戦術を改善する
+
+## ゲームループ
+
+```text
+写真撮影 → オブジェクト抽出 → 画像特徴量分析 → メカ生成
+  → 戦術セット選択・編集 → チーム編成 → オートバトル → ログ確認・改善
+```
+
+## メカ型
+
+| 型 | 役割 | ステータス傾向 |
+|---|---|---|
+| 鳥形 | 高速・回避・先制 | SPD 高、EVA 高、HP 低め |
+| 人型 | バランス・武装切替・戦術適性 | 平均的、TEC 高め |
+| 獣型 | 装甲・近接・耐久 | HP 高、DEF 高、SPD 低め |
+
+戦闘性能は生成画像ではなく、撮影画像と抽出オブジェクトの分析値から決定する。生成画像は見た目のみを担う。
+
+## 戦術システム
+
+編成の基本単位は **機体 × 戦術セット**。
+
+- **初心者**: 5 種のプリセット戦術から選択（近接戦闘 / 中距離ヒットアンドアウェイ / 遠距離狙撃 / 爆撃 / 砲台）
+- **中級者**: 4 スロット + 基本行動の簡易編集（スロット 1 から順に条件評価、最初に成立した行動を実行）
+- **課金ユーザー**: 自然言語から戦術スロットへの変換（入力補助のみ。戦闘中の判断能力は変わらない）
+
+## バトル
+
+- 3 体チーム（前衛・中衛・後衛）の 3 対 3 ターン制オートバトル
+- MVP では非同期 PvP、サーバー権威で結果確定
+- 乱数はサーバー側 seed で管理し、同一条件で再現可能
+- 型相性: 鳥形 > 獣型 > 人型 > 鳥形（有利 1.15 / 不利 0.90）
+- クライアントは演出再生、戦闘中に LLM は使用しない
+
+## プラットフォーム・課金
+
+| 項目 | 内容 |
+|---|---|
+| 対象 | iOS / Android |
+| 課金基盤 | RevenueCat（ハッカソン必須要件） |
+| 課金方針 | Pay to Convenience（利便性課金）。Pay to Win ではない |
+
+課金で増やさないもの: 戦術スロット数、使用可能条件、使用可能行動、バトル中の判断能力。
+
+## MVP 範囲
+
+**含む**
+
+- 写真撮影・1 オブジェクト抽出・セグメンテーション
+- 特徴量・情報量スコア計算、メカ生成（3 型）
+- 戦術プリセット 5 種、4 スロット + 基本行動の編集
+- 3 体チーム編成、非同期オートバトル、バトルログ、簡易ランキング
+- RevenueCat 組み込み（SDK、Paywall、Entitlement、購入復元）
+
+**含まない**
+
+- リアルタイム PvP、複数オブジェクト合成、マーケット、AR、位置情報連動
+- 戦闘中 LLM 判断、複雑なノーコードエディタ、本格的な育成ツリー
+
+## システム構成（概要）
+
+```text
+iOS / Android Client
+  ├─ Camera / Object Selection / Mech Viewer
+  ├─ Tactic Editor / Team Builder / Battle Viewer
+  └─ RevenueCat SDK
+
+Backend API
+  ├─ Auth / Capture / Object Analysis / Mech / Tactic / Battle / Ranking
+  └─ Billing (RevenueCat Webhook)
+
+ML Pipeline
+  ├─ Detection / Segmentation / Feature Extraction
+  ├─ Image-to-Image Generation / Safety Filter
+  └─ Optional LLM (戦術コンパイルのみ、戦闘外)
+```
+
+## 開発フェーズ
+
+| Phase | 目的 |
+|---|---|
+| 0 | 技術検証（抽出、i2i 生成、戦術変換、端末性能） |
+| 1 | 縦切りプロトタイプ（最小ゲームループ） |
+| 2 | MVP（非同期 PvP、ランキング、不正対策） |
+| 3 | β版（自然言語戦術、課金導線） |
+| 4 | 正式版（シーズン制、イベント、コミュニティ） |
+
+## 仕様書
+
+詳細仕様は `docs/` 配下を参照。
+
+| ファイル | 内容 |
+|---|---|
+| [00_root_overview.md](docs/00_root_overview.md) | 全体概要、設計原則 |
+| [01_game_concept_and_loop.md](docs/01_game_concept_and_loop.md) | コンセプト、コアループ |
+| [02_photo_object_extraction.md](docs/02_photo_object_extraction.md) | 撮影、検出、セグメンテーション |
+| [03_mech_generation_and_stats.md](docs/03_mech_generation_and_stats.md) | メカ生成、型、ステータス |
+| [04_tactics.md](docs/04_tactics.md) | 戦術プリセット、スロット編集 |
+| [05_team_and_battle.md](docs/05_team_and_battle.md) | チーム編成、オートバトル |
+| [06_monetization_and_fairness.md](docs/06_monetization_and_fairness.md) | 課金、公平性、RevenueCat |
+| [07_platform_and_system.md](docs/07_platform_and_system.md) | プラットフォーム、API、データモデル |
+| [08_mvp_and_roadmap.md](docs/08_mvp_and_roadmap.md) | MVP 範囲、ロードマップ、リスク |
+
+## 設計原則（抜粋）
+
+1. 写真由来の個性をゲームの中心に置く
+2. 見た目は生成画像、戦闘性能は分析値から決定する
+3. バトルはサーバー側で再現可能に処理する
+4. 戦闘中に LLM は使用しない
+5. 課金で戦術の上限・条件・行動は増やさない
+6. 初心者はプリセット選択だけで遊べる
