@@ -7,7 +7,8 @@ from photo_mecha_battle.models import MechForm
 client = TestClient(app)
 
 
-def test_vertical_slice_via_api():
+def test_vertical_slice_via_api(auth_headers):
+    headers = {"X-User-Token": auth_headers["X-User-Token"]}
     capture = client.post("/captures", json={"label": "umbrella"}).json()
     segment = client.post(
         f"/captures/{capture['id']}/segment",
@@ -20,6 +21,7 @@ def test_vertical_slice_via_api():
             "form": MechForm.BIRD.value,
             "name": "APIメカ",
         },
+        headers=headers,
     ).json()
     battle = client.post(
         "/battles",

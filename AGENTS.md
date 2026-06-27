@@ -26,6 +26,20 @@
 - 戦術は公開戦闘状態のフィクスチャを用意し、非公開情報（相手戦術全文、次行動、seed）を参照していないことを間接的にも検証する。
 - ML / 画像生成はゴールデン画像＋許容誤差、またはモックアダプタで境界をテストする。実モデル推論を CI の必須ゲートにしない（Phase 0 検証スクリプトで扱う）。
 
+## カバレッジ基準（merge ブロッカー）
+
+`photo_mecha_battle` パッケージに対し、pytest + pytest-cov（`--cov-branch`）で以下を満たすこと。
+
+| 指標 | 定義 | 閾値 |
+|---|---|---|
+| C0 | 命令（行）カバレッジ `covered_lines / num_statements` | **90% 以上** |
+| C1 | 分岐カバレッジ `covered_branches / num_branches` | **80% 以上** |
+
+- 実行: `python -m pytest`（`pyproject.toml` の `addopts` で JSON レポートを出力）
+- 閾値チェック: `tests/conftest.py` の `pytest_sessionfinish` が `coverage.json` を検証する
+- 新規モジュール追加時は、エラーパス・境界条件を含めて閾値を維持する
+- カバレッジ不足を `--no-cov` で回避して merge しない
+
 ## 実装の不変条件（コードレビュー・Coderabbit の追加観点）
 
 グローバルの Code Review に加え、以下は **merge ブロッカー** とする。

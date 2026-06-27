@@ -13,11 +13,11 @@
 
 ## Phase 2 — MVP
 
-| Status | ID | Task |
-|---|---|---|
-| 🔲 | P2-001 | User auth |
-| 🔲 | P2-002 | Mech persistence |
-| 🔲 | P2-003 | Tactic slot editor |
-| 🔲 | P2-004 | Async PvP matchmaking |
-| 🔲 | P2-005 | Ranking |
-| 🔲 | P2-006 | RevenueCat integration |
+| Status | ID | Task | Notes |
+|---|---|---|---|
+| ✅ | P2-001 | User auth | `POST /auth/register`, `X-User-Token` |
+| ✅ | P2-002 | Mech persistence | SQLite via `api/database.py` |
+| ✅ | P2-003 | Tactic slot editor | `POST/PUT /tactics`, catalog |
+| ✅ | P2-004 | Async PvP matchmaking | `POST /battles/match`, ranked queue |
+| ✅ | P2-005 | Ranking | ELO-like delta, `GET /ranking` |
+| ⚠️ | P2-006 | RevenueCat integration | billing stub only; SDK/store TBD |

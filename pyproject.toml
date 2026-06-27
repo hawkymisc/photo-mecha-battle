@@ -12,7 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 api = ["fastapi>=0.115", "uvicorn>=0.32"]
-dev = ["pytest>=8.0", "fastapi>=0.115", "httpx>=0.27"]
+dev = ["pytest>=8.0", "pytest-cov>=6.0", "fastapi>=0.115", "httpx>=0.27"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/photo_mecha_battle"]
@@ -20,3 +20,11 @@ packages = ["src/photo_mecha_battle"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--cov=photo_mecha_battle --cov-branch --cov-report=term-missing --cov-report=json"
+
+[tool.coverage.run]
+branch = true
+source = ["photo_mecha_battle"]
+
+[tool.coverage.report]
+show_missing = true
