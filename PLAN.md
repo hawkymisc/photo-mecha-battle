@@ -19,5 +19,41 @@
 | ✅ | P2-002 | Mech persistence | SQLite via `api/database.py` |
 | ✅ | P2-003 | Tactic slot editor | `POST/PUT /tactics`, catalog |
 | ✅ | P2-004 | Async PvP matchmaking | `POST /battles/match`, ranked queue |
-| ✅ | P2-005 | Ranking | ELO-like delta, `GET /ranking` |
-| ⚠️ | P2-006 | RevenueCat integration | billing stub only; SDK/store TBD |
+| ✅ | P2-005 | Ranking | 固定デルタ方式 (+25/−15 等、docs/05)、`GET /ranking` |
+| ⚠️ | P2-006 | RevenueCat integration | webhook stub at `/billing/revenuecat/webhook` |
+
+## Phase 2.5 — MVP Capture Pipeline
+
+| Status | ID | Task | Notes |
+|---|---|---|---|
+| ✅ | P25-001 | Photo upload API | `POST /captures/upload` (multipart) |
+| ✅ | P25-002 | PIL feature extraction | `vision/analysis.py` |
+| ✅ | P25-003 | Detection + segmentation | `vision/detection.py`, `vision/segmentation.py` |
+| ✅ | P25-004 | Mech art generation (cosmetic) | `vision/mech_art.py`, `art_url` on mechs |
+| ✅ | P25-005 | Generation quotas | `GET /users/quotas`, daily limits |
+| ✅ | P25-006 | Duplicate capture guard | perceptual hash + hamming distance |
+| 🔲 | P25-007 | Mobile client (iOS/Android) | out of scope for backend MVP |
+
+## Phase D — 仕様精緻化・実装整合（2026-07-02 監査で発見）
+
+<!-- CODEX_REVIEWED -->
+
+docs/00〜09 の精緻化（実装値の還流、07/09 一本化、未実装概念の隔離）に伴い発見した実装乖離。
+仕様の正本判断: バトル数値・クォータ = 実装正、プリセット定義・課金境界 = 仕様正。
+
+優先順位: D-004 / D-005 は**課金フローを本番に出す前のリリースブロッカー**。
+D-002 はバトルバランス検証の前提。D-003 はクライアントのバトル演出実装の前提。
+
+| Status | ID | Task | 正本 | 受入基準・テスト |
+|---|---|---|---|---|
+| ✅ | D-001 | docs/02〜09・README・AGENTS の精緻化 | — | 実装値還流、07 を 09 へ一本化、確定状態注記 |
+| 🔲 | D-002 | 砲台型プリセットの shadowing 修正 | docs/04 砲台型 | seed 固定バトルテストで「HP≤30 で防御が発動する」ことを検証。他 4 プリセットの挙動が不変であることをテストで確認。※ Issue #1、docs 精緻化中に発見 |
+| 🔲 | D-003 | バトルログの構造化 JSON 保存 | docs/05 ログエントリ構造 | 新カラム（または log_text の JSON 化）への移行計画を含む。既存 log_text 行の後方互換（読み出し時フォールバック）。API レスポンス形のテスト。クライアント演出再生 (docs/09) の前提。※ Issue #2 |
+| 🔲 | D-004 | `POST /billing/entitlements` の管理者制限 | docs/06 デモ用 API の扱い | **リリースブロッカー**: 一般ユーザーが自分の Entitlement を変更できる状態で本番公開しない。認可テスト（管理者以外 403）。※ Issue #3 |
+| 🔲 | D-005 | Webhook の Entitlement 個別付与 | docs/06 Webhook イベント処理 | RevenueCat 商品↔Entitlement 対応確定が前提。Webhook 署名検証・冪等性（同一イベント再送で二重付与しない）を受入基準に含める。イベント種別×Entitlement のマトリクステスト。※ Issue #4 |
+| ⛔ | D-006 | `disrupt` の能力低下効果 | docs/04 行動候補注記 | **blocked**: 先に状態異常システムを docs/08→docs/05 で設計してから着手。部分実装しない。受入基準（暫定挙動）: `disrupt` は決定的な低威力攻撃 (威力 0.4) のままであること |
+| ⚠️ | D-007 | ランク戦 seed のサーバー生成 | docs/09 信頼モデル | **release blocker (ランク戦)**: 受入基準: ① 公開 API `POST /battles/ranked` はクライアント送信 seed を**無視**する（後方互換のため 400 にしない） ② seed はサーバーが生成し `battles.seed` に保存、保存 seed で同一結果・同一ログを再現（seed はレスポンスで返してよい: 演出再生用、docs/09） ③ 再現性テストはエンジン直呼びの seed 注入で維持。実装分割・エンジンバージョン記録の要否は Issue 側に詳細化。※ Codex レビューで発見、Issue #5 |
+| ⚠️ | D-008 | `GET /battles/{id}` の参照権限 | docs/07 所有権 | **release blocker (プライバシー)**: 受入基準: 対戦当事者 (player_a / player_b) は参照可、未認証は 401、第三者は 403。CPU 戦は player_a のみ。認可テストをマトリクスで追加。※ Codex レビューで発見、Issue #6 |
+
+※ ランク戦のレーティング確定は `POST /battles/ranked`（サーバー権威）でのみ行う。デルタ値・引き分け・
+ランキング応答形は docs/05 を正とし、クライアントから勝敗・デルタを受け取らない (docs/09 信頼モデル)。

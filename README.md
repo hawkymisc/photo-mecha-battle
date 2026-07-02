@@ -70,20 +70,24 @@
 
 ## システム構成（概要）
 
+軽量サーバー・クライアント厚めの分担を採る（詳細は [docs/09](docs/09_lightweight_server_architecture.md)）。
+
 ```text
-iOS / Android Client
-  ├─ Camera / Object Selection / Mech Viewer
-  ├─ Tactic Editor / Team Builder / Battle Viewer
+iOS / Android Client（厚め）
+  ├─ Camera / 撮影品質警告
+  ├─ 物体検出・セグメント・特徴量算出（オンデバイス）
+  ├─ Tactic Editor / Team Builder / バトル演出再生
   └─ RevenueCat SDK
 
-Backend API
-  ├─ Auth / Capture / Object Analysis / Mech / Tactic / Battle / Ranking
-  └─ Billing (RevenueCat Webhook)
+Backend API（薄め）
+  ├─ Auth / 永続化（メカ・戦術・チーム）
+  ├─ 入力検証（perceptual hash / 特徴量再計算 / クォータ）
+  ├─ 非同期PvP マッチング / バトル確定（seed 固定・決定的）
+  ├─ ランキング / バトルログ保存
+  └─ Billing (RevenueCat Webhook / Entitlement 同期)
 
-ML Pipeline
-  ├─ Detection / Segmentation / Feature Extraction
-  ├─ Image-to-Image Generation / Safety Filter
-  └─ Optional LLM (戦術コンパイルのみ、戦闘外)
+Optional Workers（将来）
+  └─ 高品質 i2i 生成（非同期ジョブ）
 ```
 
 ## 開発フェーズ
@@ -109,8 +113,9 @@ ML Pipeline
 | [04_tactics.md](docs/04_tactics.md) | 戦術プリセット、スロット編集 |
 | [05_team_and_battle.md](docs/05_team_and_battle.md) | チーム編成、オートバトル |
 | [06_monetization_and_fairness.md](docs/06_monetization_and_fairness.md) | 課金、公平性、RevenueCat |
-| [07_platform_and_system.md](docs/07_platform_and_system.md) | プラットフォーム、API、データモデル |
+| [07_platform_and_system.md](docs/07_platform_and_system.md) | プラットフォーム、認証、データモデル |
 | [08_mvp_and_roadmap.md](docs/08_mvp_and_roadmap.md) | MVP 範囲、ロードマップ、リスク |
+| [09_lightweight_server_architecture.md](docs/09_lightweight_server_architecture.md) | 軽量サーバー・クライアント厚めのシステム分担 |
 
 ## 設計原則（抜粋）
 
