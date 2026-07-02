@@ -4,9 +4,9 @@
 
 ## 仕様の唯一の情報源
 
-- ゲーム仕様は `docs/00`〜`09` が正本。実装前に該当ドキュメントを読み、矛盾があればコードより先に仕様を直す。
-- **システム分担・API の主経路**は `docs/09_lightweight_server_architecture.md` を正とする（旧 `docs/07` のサーバー集中型構成は 2026-07-02 に廃止・統合済み。`docs/07` は認証・データモデル・API 共通規約を担当）。
-- `docs/08_mvp_and_roadmap.md` の「MVP では実装しないもの」はスコープ外。着手するにはユーザー明示の GO が必要。
+- ゲーム仕様は [`docs/00`](docs/00_root_overview.md)〜[`09`](docs/09_lightweight_server_architecture.md) が正本（一覧は [docs/00 の仕様書構成](docs/00_root_overview.md#仕様書構成)）。実装前に該当ドキュメントを読み、矛盾があればコードより先に仕様を直す。
+- **システム分担・API の主経路**は [`docs/09_lightweight_server_architecture.md`](docs/09_lightweight_server_architecture.md) を正とする（旧 [`docs/07`](docs/07_platform_and_system.md) のサーバー集中型構成は 2026-07-02 に廃止・統合済み。[`docs/07`](docs/07_platform_and_system.md) は認証・データモデル・API 共通規約を担当）。
+- [`docs/08_mvp_and_roadmap.md`](docs/08_mvp_and_roadmap.md) の「MVP では実装しないもの」はスコープ外。着手するにはユーザー明示の GO が必要。
 - 設計判断を変えたら、同一セッション内で `docs/` 内の関連キーワードを grep し、上位の設計原則・下位の API 案の両方を整合させる（ハーネスの Document Consistency を `docs/` に適用）。
 
 ## TDD — 仕様をテストコードに書く
@@ -17,8 +17,8 @@
 |---|---|
 | バトルエンジン | 同一 `seed` + 同一入力でログ・結果が完全一致すること |
 | 戦術評価 | スロット 1→N の順序評価、行動不能時のフォールスルー、基本行動への退避 |
-| 型相性・ダメージ | `docs/05` の倍率・式。乱数範囲は seed 固定で検証 |
-| 情報量スコア | `docs/03` の重み付け。極端入力へのキャップ |
+| 型相性・ダメージ | [`docs/05`](docs/05_team_and_battle.md) の倍率・式。乱数範囲は seed 固定で検証 |
+| 情報量スコア | [`docs/03`](docs/03_mech_generation_and_stats.md) の重み付け。極端入力へのキャップ |
 | 課金境界 | Entitlement の有無で戦術スロット数・条件・行動が変わらないこと |
 
 **テストの書き方**
@@ -37,7 +37,7 @@
 | C1 | 分岐カバレッジ `covered_branches / num_branches` | **80% 以上** |
 
 - 実行: `python -m pytest`（`pyproject.toml` の `addopts` で JSON レポートを出力）
-- 閾値チェック: `tests/conftest.py` の `pytest_sessionfinish` が `coverage.json` を検証する
+- 閾値チェック: [`tests/conftest.py`](tests/conftest.py) の `pytest_sessionfinish` が `coverage.json` を検証する
 - 新規モジュール追加時は、エラーパス・境界条件を含めて閾値を維持する
 - カバレッジ不足を `--no-cov` で回避して merge しない
 
@@ -49,7 +49,7 @@
 2. **戦闘中ノー LLM**: ランタイムのターン解決・ダメージ計算・戦術選択に LLM / 非決定的 API を呼ばない。自然言語戦術はコンパイル時のみ（Phase 3 以降）。
 3. **性能と見た目の分離**: ステータス・スキルは `feature_vector` / `info_score` 等の分析値から算出。生成メカ画像のピクセルやプロンプトから戦闘力を導かない。
 4. **Pay to Convenience**: `Entitlement` は保存枠・要約・装飾・戦術コンパイル導線に限定。条件候補・行動候補・ランク戦スロット数に課金分岐を入れない。
-5. **ユーザー画像の扱い**: `docs/02` の安全性・不正対策（顔検出、perceptual hash、品質スコア）をスキップするショートカットを入れない。
+5. **ユーザー画像の扱い**: [`docs/02`](docs/02_photo_object_extraction.md) の安全性・不正対策（顔検出、perceptual hash、品質スコア）をスキップするショートカットを入れない。
 
 ## 不可逆操作のゲーム固有チェックポイント
 
@@ -93,7 +93,7 @@ scripts/diag/
 
 ## フェーズ管理
 
-- `docs/08` の Phase 0〜4 を PLAN の基準とする。タスク完了時は `✅` / `⚠️` / `🔲` を更新（ハーネスの project-management）。
+- [`docs/08`](docs/08_mvp_and_roadmap.md) の Phase 0〜4 を PLAN の基準とする。タスク完了時は `✅` / `⚠️` / `🔲` を更新（ハーネスの project-management）。
 - Phase を飛ばして Phase 3 機能（自然言語戦術、ログ要約）に入る場合は、縦切りループ（撮影→メカ→プリセット戦術→ダミーバトル→ログ）が Phase 1 相当で通っていることを先に確認する。
 
 ## PO レビュー — 何をユーザーに見せるか
@@ -115,8 +115,8 @@ scripts/diag/
 ハーネスの maintain-documents に従い、実装で判明したことは仕様へ還流する。
 
 - 数値が確定したら（ダメージ式の係数、位置補正、品質閾値）→ 該当 `docs/0N_*.md` とテストを同時更新
-- MVP 外に着手したら → `docs/08` の「未決事項」を減らすか、明示的に未決のまま残す理由を書く
-- API・データモデルを実装したら → `docs/07` の案と実コードの差分を解消する
+- MVP 外に着手したら → [`docs/08`](docs/08_mvp_and_roadmap.md) の「未決事項」を減らすか、明示的に未決のまま残す理由を書く
+- API・データモデルを実装したら → [`docs/07`](docs/07_platform_and_system.md) の案と実コードの差分を解消する
 
 ## エラーハンドリング
 

@@ -1,5 +1,7 @@
 # 06. 課金・公平性仕様
 
+[← 仕様書一覧](00_root_overview.md)
+
 ## 目的
 
 本ドキュメントは、課金要素、Pay to Win 回避方針、公平性に関する仕様を定義する。
@@ -47,7 +49,7 @@
 
 ## 生成クォータ（確定）
 
-撮影アップロードとメカ生成には日次クォータを設ける（生成コスト・不正対策。`docs/08`）。
+撮影アップロードとメカ生成には日次クォータを設ける（生成コスト・不正対策。[`docs/08`](08_mvp_and_roadmap.md)）。
 消費は UTC 日付単位でカウントし、翌日リセットする。超過時は API が 429 を返す。
 
 | 枠 | 無課金 | premium |
@@ -56,8 +58,8 @@
 | メカ生成 / 日 | 10 | 30 |
 
 **公平性の整理**: クォータ拡大は「生成の試行回数」を増やすのみである。
-1 体あたりのステータス算出式（`docs/03`）、ランク戦チームの 3 体編成、戦術スロット数・条件・行動
-（`docs/04`）は全プレイヤー共通であり、戦闘中の判断能力に差はつかない。
+1 体あたりのステータス算出式（[`docs/03`](03_mech_generation_and_stats.md)）、ランク戦チームの 3 体編成、戦術スロット数・条件・行動
+（[`docs/04`](04_tactics.md)）は全プレイヤー共通であり、戦闘中の判断能力に差はつかない。
 よってクォータ拡大は Pay to Convenience の範囲内とする。
 ただし Paywall では「バトル性能は変わらない」ことを明示する（下記 Paywall 方針）。
 
@@ -65,7 +67,7 @@
 
 自然言語戦術生成は、戦術作成の入力補助である。
 
-課金ユーザーが文章で作った戦術も、最終的には通常の戦術スロット（`docs/04` の DSL）へ変換される。
+課金ユーザーが文章で作った戦術も、最終的には通常の戦術スロット（[`docs/04`](04_tactics.md) の DSL）へ変換される。
 非課金ユーザーも手動で同じ戦術を作れる。
 
 ## ローカル LLM とクラウド推論
@@ -129,7 +131,7 @@
 | Entitlement | 解放機能 | 実装状態 |
 |---|---|---|
 | `premium_tactics` | 自然言語戦術生成（Phase 3） | キーは実装済み。機能ゲート対象（自然言語生成）が未実装 |
-| `generation_boost` | 生成クォータ拡大（上記の表） | **実装済み**（`api/limits.py`） |
+| `generation_boost` | 生成クォータ拡大（上記の表） | **実装済み**（[`api/limits.py`](../src/photo_mecha_battle/api/limits.py)） |
 | `extra_tactic_slots` | 戦術**保存枠**の拡張 | 未実装（Phase 3） |
 | `battle_log_summary` | バトルログ要約 | 未実装（Phase 3） |
 | `cosmetic_pack_access` | UI スキン、カード装飾などの見た目要素 | 未実装（Phase 3+） |
@@ -138,7 +140,7 @@
 
 > **現行実装の注記**: 現行の webhook スタブは購入系イベントで `premium_tactics` と `generation_boost` を
 > 一括で有効化する簡易実装である。また、クォータ拡大の判定も `premium_tactics` **または** `generation_boost`
-> のいずれかが有効なら適用される（`api/limits.py`）。本仕様では**クォータ拡大は `generation_boost` のみ**に
+> のいずれかが有効なら適用される（[`api/limits.py`](../src/photo_mecha_battle/api/limits.py)）。本仕様では**クォータ拡大は `generation_boost` のみ**に
 > 紐づくのが正であり、商品と Entitlement の対応が RevenueCat ダッシュボードで確定した時点で、
 > イベント内の entitlement 情報に基づく個別付与＋キー別の機能ゲートに置き換える（PLAN D-005 参照）。
 
@@ -182,7 +184,7 @@ Premium は作戦作成とメカ生成を便利にする機能です。
 ### デモ用 Entitlement 付与 API の扱い
 
 ハッカソンデモ用に、Entitlement を直接切り替える API（`POST /billing/entitlements`）を用意している
-（`docs/08` の「Entitlement 強制付与できる管理者フラグ」に対応）。
+（[`docs/08`](08_mvp_and_roadmap.md) の「Entitlement 強制付与できる管理者フラグ」に対応）。
 
 - **現状は認証ユーザーが自分自身の Entitlement を自由に変更できる**。デモ・開発環境限定の挙動である。
 - 本番公開前に、管理者権限チェックまたはエンドポイント無効化を必須とする（PLAN の修正タスク参照）。

@@ -46,16 +46,16 @@
 
 | ドキュメント | 内容 |
 |---|---|
-| 00_root_overview.md | 全体概要、仕様書体系、設計原則 |
-| 01_game_concept_and_loop.md | ゲームコンセプト、コアループ、プレイヤー体験 |
-| 02_photo_object_extraction.md | 写真撮影、オブジェクト検出、セグメンテーション |
-| 03_mech_generation_and_stats.md | メカ生成、型、ステータス、情報量スコア |
-| 04_tactics.md | 戦術プリセット、スロット編集、自然言語戦術生成 |
-| 05_team_and_battle.md | チーム編成、位置、オートバトル、バトルログ |
-| 06_monetization_and_fairness.md | 課金仕様、Pay to Win回避、利便性課金 |
-| 07_platform_and_system.md | iOS/Android、認証、データモデル、API 共通規約（構成・API 一覧は 09 が正） |
-| 08_mvp_and_roadmap.md | MVP範囲、開発フェーズ、未決事項、リスク |
-| 09_lightweight_server_architecture.md | 軽量サーバー・クライアント厚めのシステム分担（本書が API 分担の正） |
+| [00_root_overview.md](00_root_overview.md) | 全体概要、仕様書体系、設計原則 |
+| [01_game_concept_and_loop.md](01_game_concept_and_loop.md) | ゲームコンセプト、コアループ、プレイヤー体験 |
+| [02_photo_object_extraction.md](02_photo_object_extraction.md) | 写真撮影、オブジェクト検出、セグメンテーション |
+| [03_mech_generation_and_stats.md](03_mech_generation_and_stats.md) | メカ生成、型、ステータス、情報量スコア |
+| [04_tactics.md](04_tactics.md) | 戦術プリセット、スロット編集、自然言語戦術生成 |
+| [05_team_and_battle.md](05_team_and_battle.md) | チーム編成、位置、オートバトル、バトルログ |
+| [06_monetization_and_fairness.md](06_monetization_and_fairness.md) | 課金仕様、Pay to Win回避、利便性課金 |
+| [07_platform_and_system.md](07_platform_and_system.md) | iOS/Android、認証、データモデル、API 共通規約（構成・API 一覧は 09 が正） |
+| [08_mvp_and_roadmap.md](08_mvp_and_roadmap.md) | MVP範囲、開発フェーズ、未決事項、リスク |
+| [09_lightweight_server_architecture.md](09_lightweight_server_architecture.md) | 軽量サーバー・クライアント厚めのシステム分担（本書が API 分担の正） |
 
 ## 重要設計原則
 
