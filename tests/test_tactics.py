@@ -32,3 +32,21 @@ def test_condition_labels_are_human_readable():
     labels = [slot.condition.label() for slot in tactic.slots]
     assert "相手が鳥形" in labels
     assert "自分ENが80以上" in labels
+
+
+@pytest.mark.parametrize(
+    ("kind", "threshold", "expected"),
+    [
+        (ConditionKind.TARGET_DEF_HIGH, None, "相手DEFが高い"),
+        (ConditionKind.TARGET_SPD_HIGH, None, "相手SPDが高い"),
+        (ConditionKind.TARGET_DEFENDING, None, "相手が防御中"),
+        (ConditionKind.TARGET_CLOSE_RANGE, None, "相手が接近型"),
+        (ConditionKind.TARGET_BACKLINE_PRESENT, None, "相手後衛が残っている"),
+        (ConditionKind.ENEMIES_REMAINING_AT_LEAST, 2, "敵が複数残っている"),
+        (ConditionKind.ALWAYS, None, "常時"),
+        (ConditionKind.SELF_EN_BELOW, 40, "自分ENが40未満"),
+        (ConditionKind.TARGET_HP_BELOW, 30, "相手HPが30%以下"),
+    ],
+)
+def test_all_condition_labels(kind, threshold, expected):
+    assert Condition(kind, threshold).label() == expected
