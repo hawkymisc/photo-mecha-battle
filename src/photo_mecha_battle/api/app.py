@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from photo_mecha_battle.api.database import Database, UserRow
-from photo_mecha_battle.api.game_store import GameStore
+from photo_mecha_battle.api.game_store import GameStore, QuotaExceededError
 from photo_mecha_battle.api.store import build_demo_cpu_team
 from photo_mecha_battle.models import MechForm, Position
 from photo_mecha_battle.tactics import (
@@ -20,8 +23,10 @@ from photo_mecha_battle.tactics import (
     Condition,
 )
 
-store = GameStore(db=Database(":memory:"))
-app = FastAPI(title="Photo Mecha Battle API", version="0.2.0")
+DATA_DIR = Path(os.environ.get("PMB_DATA_DIR", "data"))
+store = GameStore(db=Database(":memory:"), data_dir=DATA_DIR)
+app = FastAPI(title="Photo Mecha Battle API", version="0.3.0")
+app.mount("/media", StaticFiles(directory=str(store.image_storage.root)), name="media")
 
 
 def get_store() -> GameStore:
@@ -48,6 +53,7 @@ class CaptureCreateRequest(BaseModel):
 
 class SegmentRequest(BaseModel):
     label: str = "umbrella"
+    bbox: list[float] | None = None
 
 
 class MechCreateRequest(BaseModel):
@@ -105,6 +111,15 @@ class EntitlementUpdateRequest(BaseModel):
     is_active: bool
 
 
+class RevenueCatWebhookRequest(BaseModel):
+    api_version: str | None = None
+    event: dict[str, object]
+
+
+class BillingSyncRequest(BaseModel):
+    active_entitlements: list[str] = Field(default_factory=list)
+
+
 def _build_tactic_set(body: TacticCreateRequest) -> TacticSet:
     slots = [
         TacticSlot(
@@ -151,21 +166,47 @@ def get_current_user(user: UserRow = Depends(require_user)):
 @app.post("/captures")
 def create_capture(body: CaptureCreateRequest, game_store: GameStore = Depends(get_store)):
     record = game_store.create_capture(body.label)
-    return {"id": record.id, "label": record.label}
+    return {"id": record.id, "label": record.label, "mode": "stub"}
+
+
+@app.post("/captures/upload")
+def upload_capture(
+    user: UserRow = Depends(require_user),
+    file: UploadFile = File(...),
+    game_store: GameStore = Depends(get_store),
+):
+    content = file.file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="empty file")
+    try:
+        return game_store.create_capture_upload(user.id, content, file.filename or "capture.jpg")
+    except ValueError as exc:
+        message = str(exc)
+        if message == "duplicate_capture":
+            raise HTTPException(status_code=409, detail="duplicate capture") from exc
+        if message.startswith("unsafe_capture:"):
+            reason = message.split(":", 1)[1]
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "unsafe_capture", "reason": reason, "action": "recapture"},
+            ) from exc
+        raise HTTPException(status_code=400, detail=message) from exc
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=f"{exc.resource} quota exceeded") from exc
 
 
 @app.post("/captures/{capture_id}/detect")
 def detect_objects(capture_id: str, game_store: GameStore = Depends(get_store)):
-    if capture_id not in game_store.captures:
+    if capture_id not in game_store.captures and game_store.db.get_capture(capture_id) is None:
         raise HTTPException(status_code=404, detail="capture not found")
     return {"candidates": game_store.detect_objects(capture_id)}
 
 
 @app.post("/captures/{capture_id}/segment")
 def segment_object(capture_id: str, body: SegmentRequest, game_store: GameStore = Depends(get_store)):
-    if capture_id not in game_store.captures:
+    if capture_id not in game_store.captures and game_store.db.get_capture(capture_id) is None:
         raise HTTPException(status_code=404, detail="capture not found")
-    record = game_store.segment_object(capture_id, body.label)
+    record = game_store.segment_object(capture_id, body.label, body.bbox)
     return {
         "id": record.id,
         "capture_id": record.capture_id,
@@ -176,17 +217,20 @@ def segment_object(capture_id: str, body: SegmentRequest, game_store: GameStore 
 
 @app.post("/objects/{object_id}/analyze")
 def analyze_object(object_id: str, game_store: GameStore = Depends(get_store)):
-    record = game_store.objects.get(object_id)
-    if record is None:
+    analysis = game_store.get_object_analysis(object_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail="object not found")
-    return {"id": record.id, "info_score": record.info_score, "features": record.features.__dict__}
+    return analysis
 
 
 @app.post("/mechs")
 def create_mech(body: MechCreateRequest, user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
-    if body.object_id not in game_store.objects:
+    if body.object_id not in game_store.objects and game_store.db.get_extracted_object(body.object_id) is None:
         raise HTTPException(status_code=404, detail="object not found")
-    return game_store.create_mech_for_user(user.id, body.object_id, body.form, body.name)
+    try:
+        return game_store.create_mech_for_user(user.id, body.object_id, body.form, body.name)
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=f"{exc.resource} quota exceeded") from exc
 
 
 @app.get("/mechs")
@@ -260,11 +304,67 @@ def update_tactic(
     return game_store.update_tactic(tactic_id, tactic)
 
 
+class TacticSimulateRequest(BaseModel):
+    mech_id: str
+    seed: int = 0
+
+
+@app.post("/tactics/{tactic_id}/simulate")
+def simulate_tactic(
+    tactic_id: str,
+    body: TacticSimulateRequest,
+    game_store: GameStore = Depends(get_store),
+):
+    if game_store.db.get_tactic(tactic_id) is None:
+        raise HTTPException(status_code=404, detail="tactic not found")
+    try:
+        result = game_store.simulate_tactic(tactic_id, body.mech_id, body.seed)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "seed": result.seed,
+        "winner_team_id": result.winner_team_id,
+        "turns": result.turns,
+        "log": result.format_log(),
+    }
+
+
 @app.post("/teams")
 def create_team(body: TeamCreateRequest, user: UserRow = Depends(require_user)):
     if len(body.slots) != 3:
         raise HTTPException(status_code=400, detail="team must have exactly 3 slots")
     team = _team_slots_to_row(user.id, body.name, body.slots)
+    return {"id": team.id, "name": team.name}
+
+
+@app.put("/teams/{team_id}")
+def update_team(
+    team_id: str,
+    body: TeamCreateRequest,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
+    if len(body.slots) != 3:
+        raise HTTPException(status_code=400, detail="team must have exactly 3 slots")
+    existing = game_store.db.get_team(team_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="team not found")
+    if existing.user_id != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
+    by_position = {slot.position: slot for slot in body.slots}
+    if set(by_position) != {Position.FRONT, Position.MIDDLE, Position.BACK}:
+        raise HTTPException(status_code=400, detail="team must include front, middle, and back")
+    team = game_store.update_team(
+        team_id=team_id,
+        user_id=user.id,
+        name=body.name,
+        front_mech_id=by_position[Position.FRONT].mech_id,
+        front_tactic_id=by_position[Position.FRONT].tactic_id,
+        middle_mech_id=by_position[Position.MIDDLE].mech_id,
+        middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
+        back_mech_id=by_position[Position.BACK].mech_id,
+        back_tactic_id=by_position[Position.BACK].tactic_id,
+    )
     return {"id": team.id, "name": team.name}
 
 
@@ -391,6 +491,11 @@ def get_ranking(game_store: GameStore = Depends(get_store)):
     return {"entries": game_store.db.get_ranking()}
 
 
+@app.get("/users/quotas")
+def get_user_quotas(user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
+    return game_store.get_user_quotas(user.id)
+
+
 @app.get("/billing/status")
 def billing_status(user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
     return {
@@ -400,11 +505,40 @@ def billing_status(user: UserRow = Depends(require_user), game_store: GameStore 
     }
 
 
+@app.get("/billing/entitlements")
+def list_entitlements(user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
+    return {"entitlements": game_store.db.get_entitlements(user.id)}
+
+
 @app.post("/billing/entitlements")
 def update_entitlement(
     body: EntitlementUpdateRequest,
     user: UserRow = Depends(require_user),
     game_store: GameStore = Depends(get_store),
 ):
+    # docs/08 ハッカソン対応: デモ用にEntitlementを強制付与できる管理者フラグ。
+    # ただし docs/06 で定義された既知のEntitlementキーのみ許可し、任意の権限を
+    # 作り出せないようにする（戦闘力・戦術スロット数には影響しない領域に限定）。
+    if body.entitlement_key not in GameStore.KNOWN_ENTITLEMENT_KEYS:
+        raise HTTPException(status_code=400, detail=f"unknown entitlement_key: {body.entitlement_key}")
     game_store.db.set_entitlement(user.id, body.entitlement_key, body.is_active)
     return {"entitlements": game_store.db.get_entitlements(user.id)}
+
+
+@app.post("/billing/sync")
+def sync_billing(
+    body: BillingSyncRequest,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
+    return game_store.sync_client_entitlements(user.id, body.active_entitlements)
+
+
+@app.post("/billing/revenuecat/webhook")
+def revenuecat_webhook(body: RevenueCatWebhookRequest, game_store: GameStore = Depends(get_store)):
+    event = body.event
+    app_user_id = str(event.get("app_user_id", ""))
+    event_type = str(event.get("type", ""))
+    if not app_user_id:
+        raise HTTPException(status_code=400, detail="missing app_user_id")
+    return game_store.apply_revenuecat_event(app_user_id, event_type)
