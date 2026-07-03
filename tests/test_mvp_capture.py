@@ -4,7 +4,12 @@ from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
 
 from photo_mecha_battle.api.app import app
-from photo_mecha_battle.api.limits import FREE_DAILY_CAPTURES, FREE_DAILY_MECHS
+from photo_mecha_battle.api.limits import (
+    FREE_DAILY_CAPTURES,
+    FREE_DAILY_MECHS,
+    PREMIUM_DAILY_CAPTURES,
+    PREMIUM_DAILY_MECHS,
+)
 
 client = TestClient(app)
 
@@ -90,7 +95,7 @@ def test_revenuecat_webhook_grants_entitlements():
     body = response.json()
     assert body["applied"] is True
     keys = {item["key"] for item in body["entitlements"] if item["is_active"]}
-    assert keys == {"premium_tactics", "extra_tactic_slots", "battle_log_summary"}
+    assert keys == {"premium_tactics", "extra_tactic_slots", "battle_log_summary", "generation_boost"}
 
 
 def test_revenuecat_cancellation_revokes_entitlements():
@@ -128,7 +133,8 @@ def test_face_like_capture_is_blocked(auth_headers):
     assert response.json()["detail"]["reason"] == "face_detected"
 
 
-def test_paid_users_get_same_capture_quota_as_free_users(auth_headers):
+def test_non_quota_entitlements_do_not_change_capture_quota(auth_headers):
+    """docs/06: クォータ拡大は generation_boost のみに紐づく。他の Entitlement では拡大しない。"""
     headers = {"X-User-Token": auth_headers["X-User-Token"]}
     client.post(
         "/billing/entitlements",
@@ -138,3 +144,16 @@ def test_paid_users_get_same_capture_quota_as_free_users(auth_headers):
     quotas = client.get("/users/quotas", headers=headers).json()
     assert quotas["captures"]["limit"] == FREE_DAILY_CAPTURES
     assert quotas["mechs"]["limit"] == FREE_DAILY_MECHS
+
+
+def test_generation_boost_entitlement_increases_capture_quota(auth_headers):
+    """docs/06 生成クォータ（確定）: generation_boost 保有者は 50/日・30/日 に拡大される。"""
+    headers = {"X-User-Token": auth_headers["X-User-Token"]}
+    client.post(
+        "/billing/entitlements",
+        json={"entitlement_key": "generation_boost", "is_active": True},
+        headers=headers,
+    )
+    quotas = client.get("/users/quotas", headers=headers).json()
+    assert quotas["captures"]["limit"] == PREMIUM_DAILY_CAPTURES
+    assert quotas["mechs"]["limit"] == PREMIUM_DAILY_MECHS
