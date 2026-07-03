@@ -281,6 +281,16 @@ def test_billing_entitlement_stub():
     assert any(item["key"] == "premium_tactics" and item["is_active"] for item in updated["entitlements"])
 
 
+def test_billing_entitlement_rejects_unknown_key():
+    user = _register("BadBuyer")
+    response = client.post(
+        "/billing/entitlements",
+        json={"entitlement_key": "unlimited_damage", "is_active": True},
+        headers=_headers(user["token"]),
+    )
+    assert response.status_code == 400
+
+
 def test_get_billing_entitlements_endpoint():
     user = _register("Lister")
     client.post(

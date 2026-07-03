@@ -516,6 +516,11 @@ def update_entitlement(
     user: UserRow = Depends(require_user),
     game_store: GameStore = Depends(get_store),
 ):
+    # docs/08 ハッカソン対応: デモ用にEntitlementを強制付与できる管理者フラグ。
+    # ただし docs/06 で定義された既知のEntitlementキーのみ許可し、任意の権限を
+    # 作り出せないようにする（戦闘力・戦術スロット数には影響しない領域に限定）。
+    if body.entitlement_key not in GameStore.KNOWN_ENTITLEMENT_KEYS:
+        raise HTTPException(status_code=400, detail=f"unknown entitlement_key: {body.entitlement_key}")
     game_store.db.set_entitlement(user.id, body.entitlement_key, body.is_active)
     return {"entitlements": game_store.db.get_entitlements(user.id)}
 
