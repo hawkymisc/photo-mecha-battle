@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from photo_mecha_battle.api.app import app
+from photo_mecha_battle.api.limits import FREE_DAILY_CAPTURES, FREE_DAILY_MECHS
 from photo_mecha_battle.tactics import ActionType, ConditionKind, TacticPreset, build_preset
 
 client = TestClient(app)
@@ -278,3 +279,47 @@ def test_billing_entitlement_stub():
         headers=_headers(user["token"]),
     ).json()
     assert any(item["key"] == "premium_tactics" and item["is_active"] for item in updated["entitlements"])
+
+
+def test_get_billing_entitlements_endpoint():
+    user = _register("Lister")
+    client.post(
+        "/billing/entitlements",
+        json={"entitlement_key": "cosmetic_pack_access", "is_active": True},
+        headers=_headers(user["token"]),
+    )
+    listed = client.get("/billing/entitlements", headers=_headers(user["token"])).json()
+    assert any(
+        item["key"] == "cosmetic_pack_access" and item["is_active"] for item in listed["entitlements"]
+    )
+
+
+def test_billing_sync_reconciles_known_entitlements_only():
+    user = _register("Syncer")
+    headers = _headers(user["token"])
+
+    synced = client.post(
+        "/billing/sync",
+        json={"active_entitlements": ["premium_tactics", "battle_log_summary", "not_a_real_key"]},
+        headers=headers,
+    ).json()
+    active_keys = {item["key"] for item in synced["entitlements"] if item["is_active"]}
+    assert active_keys == {"premium_tactics", "battle_log_summary"}
+
+    # A subsequent sync without a previously-active key revokes it (full snapshot semantics).
+    resynced = client.post(
+        "/billing/sync",
+        json={"active_entitlements": ["extra_tactic_slots"]},
+        headers=headers,
+    ).json()
+    active_keys_after = {item["key"] for item in resynced["entitlements"] if item["is_active"]}
+    assert active_keys_after == {"extra_tactic_slots"}
+
+
+def test_billing_sync_does_not_change_generation_quota():
+    user = _register("SyncQuota")
+    headers = _headers(user["token"])
+    client.post("/billing/sync", json={"active_entitlements": ["premium_tactics"]}, headers=headers)
+    quotas = client.get("/users/quotas", headers=headers).json()
+    assert quotas["captures"]["limit"] == FREE_DAILY_CAPTURES
+    assert quotas["mechs"]["limit"] == FREE_DAILY_MECHS

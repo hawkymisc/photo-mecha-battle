@@ -317,6 +317,27 @@ class GameStore:
     # いずれも利便性・表現機能であり、戦闘性能や戦術スロット数・使用可能条件/行動には影響しない。
     _PREMIUM_BUNDLE_ENTITLEMENTS = ("premium_tactics", "extra_tactic_slots", "battle_log_summary")
 
+    # docs/06 Entitlement案の全量。docs/07 の POST /billing/sync はこの集合に限定して
+    # クライアント CustomerInfo を反映する（未知キーは無視し、戦闘系の権限拡張を防ぐ）。
+    KNOWN_ENTITLEMENT_KEYS = (
+        "premium_tactics",
+        "extra_tactic_slots",
+        "battle_log_summary",
+        "cosmetic_pack_access",
+    )
+
+    def sync_client_entitlements(self, user_id: str, active_keys: list[str]) -> dict[str, object]:
+        """docs/07 POST /billing/sync: クライアントの CustomerInfo とサーバー状態の同期。
+
+        RevenueCat Webhook が権威ソースであり、これはWebhook未達時のフォールバック
+        （docs/08 リスク対策）。既知のEntitlementキーのみを反映し、クライアント申告を
+        そのまま鵜呑みにして未知の権限を付与することはない。
+        """
+        active_set = {key for key in active_keys if key in self.KNOWN_ENTITLEMENT_KEYS}
+        for key in self.KNOWN_ENTITLEMENT_KEYS:
+            self.db.set_entitlement(user_id, key, key in active_set)
+        return {"entitlements": self.db.get_entitlements(user_id)}
+
     def apply_revenuecat_event(self, app_user_id: str, event_type: str) -> dict[str, object]:
         user = self.db.get_user(app_user_id)
         if user is None:

@@ -116,6 +116,10 @@ class RevenueCatWebhookRequest(BaseModel):
     event: dict[str, object]
 
 
+class BillingSyncRequest(BaseModel):
+    active_entitlements: list[str] = Field(default_factory=list)
+
+
 def _build_tactic_set(body: TacticCreateRequest) -> TacticSet:
     slots = [
         TacticSlot(
@@ -501,6 +505,11 @@ def billing_status(user: UserRow = Depends(require_user), game_store: GameStore 
     }
 
 
+@app.get("/billing/entitlements")
+def list_entitlements(user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
+    return {"entitlements": game_store.db.get_entitlements(user.id)}
+
+
 @app.post("/billing/entitlements")
 def update_entitlement(
     body: EntitlementUpdateRequest,
@@ -509,6 +518,15 @@ def update_entitlement(
 ):
     game_store.db.set_entitlement(user.id, body.entitlement_key, body.is_active)
     return {"entitlements": game_store.db.get_entitlements(user.id)}
+
+
+@app.post("/billing/sync")
+def sync_billing(
+    body: BillingSyncRequest,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
+    return game_store.sync_client_entitlements(user.id, body.active_entitlements)
 
 
 @app.post("/billing/revenuecat/webhook")
