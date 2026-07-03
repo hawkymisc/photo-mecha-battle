@@ -22,6 +22,10 @@ from photo_mecha_battle.vision.segmentation import image_to_png_bytes, segment_b
 
 DUPLICATE_HASH_DISTANCE = 8
 
+# docs/02 不正・悪用対策: ノイズ画像／QRコードは全面ブロックせず「スコア制限」で対応する。
+SCORE_PENALIZED_SAFETY_REASONS = {"noise_image_detected", "qr_code_detected"}
+PENALIZED_INFO_SCORE_CAP = 0.35
+
 
 @dataclass(frozen=True)
 class PipelineObject:
@@ -115,6 +119,9 @@ def segment_for_capture(
     crop_path = storage.save_crop(object_id, image_to_png_bytes(segmentation.crop))
     mask_path = storage.save_mask(object_id, image_to_png_bytes(segmentation.mask))
     info_score = compute_info_score(features)
+    capture_safety_reason = (row.get("quality") or {}).get("safety_reason")
+    if capture_safety_reason in SCORE_PENALIZED_SAFETY_REASONS:
+        info_score = min(info_score, PENALIZED_INFO_SCORE_CAP)
     db.save_extracted_object(
         object_id=object_id,
         capture_id=capture_id,
@@ -126,7 +133,7 @@ def segment_for_capture(
         detected_label=label,
         confidence=segmentation.mask_confidence,
         quality_json=quality.as_dict(),
-        safety_status="ok",
+        safety_status=row.get("safety_status", "ok"),
     )
     return PipelineObject(
         id=object_id,

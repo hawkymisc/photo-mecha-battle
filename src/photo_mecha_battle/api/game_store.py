@@ -12,6 +12,7 @@ from photo_mecha_battle.api.database import Database, TeamRow, UserRow
 from photo_mecha_battle.api.image_storage import ImageStorage
 from photo_mecha_battle.api.limits import limits_for_user
 from photo_mecha_battle.api.store import InMemoryStore, CaptureRecord, ObjectRecord, build_demo_cpu_team
+from photo_mecha_battle.battle import BattleEngine, BattleResult
 from photo_mecha_battle.models import Mech, MechForm, MechStats, Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticSet
 from photo_mecha_battle.tactics_serde import tactic_set_from_payload, tactic_set_to_payload
@@ -179,6 +180,21 @@ class GameStore:
         self.db.update_tactic(tactic_id, payload)
         return {"id": tactic_id, **payload}
 
+    def simulate_tactic(self, tactic_id: str, mech_id: str, seed: int = 0) -> BattleResult:
+        """docs/07 POST /tactics/{id}/simulate: テストバトル。
+
+        Runs the tactic against the demo CPU team without touching rating or
+        persisted battle history — a scratch sandbox for tactic tuning.
+        """
+        tactic = self.get_tactic_set(tactic_id)
+        if tactic is None:
+            raise ValueError(f"tactic not found: {tactic_id}")
+        mech = self._load_mech(mech_id)
+        player_team = Team(id="sim-player", name="Simulation", slots=[TeamSlot(mech=mech, position=Position.FRONT)])
+        player_tactics = {Position.FRONT: tactic}
+        cpu_team, cpu_tactics = build_demo_cpu_team()
+        return BattleEngine().simulate(player_team, player_tactics, cpu_team, cpu_tactics, seed=seed)
+
     def create_team(
         self,
         user_id: str,
@@ -202,6 +218,32 @@ class GameStore:
             back_tactic_id=back_tactic_id,
         )
         self.db.save_team(team)
+        return team
+
+    def update_team(
+        self,
+        team_id: str,
+        user_id: str,
+        name: str,
+        front_mech_id: str,
+        front_tactic_id: str,
+        middle_mech_id: str,
+        middle_tactic_id: str,
+        back_mech_id: str,
+        back_tactic_id: str,
+    ) -> TeamRow:
+        team = TeamRow(
+            id=team_id,
+            user_id=user_id,
+            name=name,
+            front_mech_id=front_mech_id,
+            front_tactic_id=front_tactic_id,
+            middle_mech_id=middle_mech_id,
+            middle_tactic_id=middle_tactic_id,
+            back_mech_id=back_mech_id,
+            back_tactic_id=back_tactic_id,
+        )
+        self.db.update_team(team)
         return team
 
     def load_team_for_battle(self, team_row: TeamRow) -> tuple[Team, dict[Position, TacticSet]]:

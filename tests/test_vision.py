@@ -1,3 +1,4 @@
+import random
 from io import BytesIO
 
 from PIL import Image, ImageDraw
@@ -5,6 +6,8 @@ from PIL import Image, ImageDraw
 from photo_mecha_battle.vision.analysis import (
     assess_capture_safety,
     detect_face_like_region,
+    detect_noise_image,
+    detect_qr_like_pattern,
     extract_features,
     hamming_distance,
     perceptual_hash,
@@ -80,3 +83,45 @@ def test_assess_capture_safety_blocks_face_like_images():
     status, reason = assess_capture_safety(_face_like_image(), "abc")
     assert status == "blocked"
     assert reason == "face_detected"
+
+
+def _noise_image() -> Image.Image:
+    rng = random.Random(0)
+    image = Image.new("RGB", (128, 128))
+    image.putdata([(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(128 * 128)])
+    return image
+
+
+def _qr_like_image() -> Image.Image:
+    size, cell = 128, 8
+    image = Image.new("L", (size, size), 255)
+    draw = ImageDraw.Draw(image)
+    rng = random.Random(1)
+    for gy in range(size // cell):
+        for gx in range(size // cell):
+            if rng.random() < 0.5:
+                draw.rectangle((gx * cell, gy * cell, gx * cell + cell - 1, gy * cell + cell - 1), fill=0)
+    draw.rectangle((0, 0, cell * 3, cell * 3), outline=0, width=cell)
+    return image.convert("RGB")
+
+
+def test_detect_noise_image_flags_random_static():
+    assert detect_noise_image(_noise_image()) is True
+
+
+def test_detect_noise_image_ignores_normal_photo():
+    assert detect_noise_image(_synthetic_image()) is False
+
+
+def test_detect_qr_like_pattern_flags_checkerboard():
+    assert detect_qr_like_pattern(_qr_like_image()) is True
+
+
+def test_detect_qr_like_pattern_ignores_normal_photo():
+    assert detect_qr_like_pattern(_synthetic_image()) is False
+    assert detect_qr_like_pattern(_face_like_image()) is False
+
+
+def test_assess_capture_safety_warns_on_noise_and_qr():
+    assert assess_capture_safety(_noise_image(), "abc") == ("warning", "noise_image_detected")
+    assert assess_capture_safety(_qr_like_image(), "abc") == ("warning", "qr_code_detected")

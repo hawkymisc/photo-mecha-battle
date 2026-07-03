@@ -261,6 +261,29 @@ class Database:
         )
         self._conn.commit()
 
+    def update_team(self, team: TeamRow) -> None:
+        self._conn.execute(
+            """
+            UPDATE teams SET
+                name = ?,
+                front_mech_id = ?, front_tactic_id = ?,
+                middle_mech_id = ?, middle_tactic_id = ?,
+                back_mech_id = ?, back_tactic_id = ?
+            WHERE id = ?
+            """,
+            (
+                team.name,
+                team.front_mech_id,
+                team.front_tactic_id,
+                team.middle_mech_id,
+                team.middle_tactic_id,
+                team.back_mech_id,
+                team.back_tactic_id,
+                team.id,
+            ),
+        )
+        self._conn.commit()
+
     def get_team(self, team_id: str) -> TeamRow | None:
         row = self._conn.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
         if row is None:

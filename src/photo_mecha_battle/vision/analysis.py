@@ -191,9 +191,66 @@ def detect_face_like_region(image: Image.Image) -> bool:
     return _FACE_TEXTURE_RATIO_MIN <= texture_ratio <= _FACE_TEXTURE_RATIO_MAX
 
 
+_NOISE_ENTROPY_MIN = 0.85
+_NOISE_EDGE_DENSITY_MIN = 0.85
+
+_QR_SAMPLE_SIZE = 32
+_QR_BLACK_RATIO_MIN = 0.35
+_QR_BLACK_RATIO_MAX = 0.65
+_QR_TRANSITION_RATIO_MIN = 0.15
+_QR_COLOR_DIVERSITY_MAX = 0.3
+
+
+def detect_noise_image(image: Image.Image) -> bool:
+    """docs/02 不正・悪用対策: ノイズ画像 → 自然画像判定、ノイズペナルティ.
+
+    Random static has near-maximal brightness entropy *and* near-maximal edge
+    density simultaneously; ordinary photos (even high-entropy ones, e.g.
+    smooth gradients) do not combine both.
+    """
+    rgb = image.convert("RGB")
+    return _entropy_from_histogram(rgb) > _NOISE_ENTROPY_MIN and _edge_density(rgb) > _NOISE_EDGE_DENSITY_MIN
+
+
+def detect_qr_like_pattern(image: Image.Image) -> bool:
+    """docs/02 不正・悪用対策: QRコード → パターン検出、スコア制限.
+
+    QR/barcode-style images are near-monochrome, roughly half black/white,
+    and made of many small alternating cells, which produces a much higher
+    black/white transition density than an ordinary photo.
+    """
+    gray = image.convert("L").resize((_QR_SAMPLE_SIZE, _QR_SAMPLE_SIZE))
+    pixels = list(gray.getdata())
+    mean = sum(pixels) / len(pixels)
+    binary = [1 if pixel > mean else 0 for pixel in pixels]
+    black_ratio = sum(binary) / len(binary)
+    if not (_QR_BLACK_RATIO_MIN <= black_ratio <= _QR_BLACK_RATIO_MAX):
+        return False
+
+    size = _QR_SAMPLE_SIZE
+    transitions = 0
+    for y in range(size):
+        for x in range(size - 1):
+            if binary[y * size + x] != binary[y * size + x + 1]:
+                transitions += 1
+    for x in range(size):
+        for y in range(size - 1):
+            if binary[y * size + x] != binary[(y + 1) * size + x]:
+                transitions += 1
+    transition_ratio = transitions / (size * (size - 1) * 2)
+    if transition_ratio < _QR_TRANSITION_RATIO_MIN:
+        return False
+
+    return _color_diversity(image) < _QR_COLOR_DIVERSITY_MAX
+
+
 def assess_capture_safety(image: Image.Image, perceptual_hash_value: str) -> tuple[str, str | None]:
     if detect_face_like_region(image):
         return "blocked", "face_detected"
+    if detect_qr_like_pattern(image):
+        return "warning", "qr_code_detected"
+    if detect_noise_image(image):
+        return "warning", "noise_image_detected"
     brightness = estimate_brightness(image)
     blur = estimate_blur(image)
     if brightness < 0.2:

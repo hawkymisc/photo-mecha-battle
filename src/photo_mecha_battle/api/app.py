@@ -300,11 +300,67 @@ def update_tactic(
     return game_store.update_tactic(tactic_id, tactic)
 
 
+class TacticSimulateRequest(BaseModel):
+    mech_id: str
+    seed: int = 0
+
+
+@app.post("/tactics/{tactic_id}/simulate")
+def simulate_tactic(
+    tactic_id: str,
+    body: TacticSimulateRequest,
+    game_store: GameStore = Depends(get_store),
+):
+    if game_store.db.get_tactic(tactic_id) is None:
+        raise HTTPException(status_code=404, detail="tactic not found")
+    try:
+        result = game_store.simulate_tactic(tactic_id, body.mech_id, body.seed)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "seed": result.seed,
+        "winner_team_id": result.winner_team_id,
+        "turns": result.turns,
+        "log": result.format_log(),
+    }
+
+
 @app.post("/teams")
 def create_team(body: TeamCreateRequest, user: UserRow = Depends(require_user)):
     if len(body.slots) != 3:
         raise HTTPException(status_code=400, detail="team must have exactly 3 slots")
     team = _team_slots_to_row(user.id, body.name, body.slots)
+    return {"id": team.id, "name": team.name}
+
+
+@app.put("/teams/{team_id}")
+def update_team(
+    team_id: str,
+    body: TeamCreateRequest,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
+    if len(body.slots) != 3:
+        raise HTTPException(status_code=400, detail="team must have exactly 3 slots")
+    existing = game_store.db.get_team(team_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="team not found")
+    if existing.user_id != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
+    by_position = {slot.position: slot for slot in body.slots}
+    if set(by_position) != {Position.FRONT, Position.MIDDLE, Position.BACK}:
+        raise HTTPException(status_code=400, detail="team must include front, middle, and back")
+    team = game_store.update_team(
+        team_id=team_id,
+        user_id=user.id,
+        name=body.name,
+        front_mech_id=by_position[Position.FRONT].mech_id,
+        front_tactic_id=by_position[Position.FRONT].tactic_id,
+        middle_mech_id=by_position[Position.MIDDLE].mech_id,
+        middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
+        back_mech_id=by_position[Position.BACK].mech_id,
+        back_tactic_id=by_position[Position.BACK].tactic_id,
+    )
     return {"id": team.id, "name": team.name}
 
 
