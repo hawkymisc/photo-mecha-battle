@@ -14,6 +14,7 @@ from photo_mecha_battle.tactics import TacticPreset, TacticSet, build_preset
 class CaptureRecord:
     id: str
     label: str = "umbrella"
+    has_image: bool = False
 
 
 @dataclass

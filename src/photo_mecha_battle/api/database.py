@@ -95,8 +95,43 @@ class Database:
                 is_active INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (user_id, entitlement_key)
             );
+            CREATE TABLE IF NOT EXISTS captures (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                original_path TEXT NOT NULL,
+                perceptual_hash TEXT NOT NULL,
+                safety_status TEXT NOT NULL,
+                quality_json TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS extracted_objects (
+                id TEXT PRIMARY KEY,
+                capture_id TEXT NOT NULL,
+                bbox_json TEXT NOT NULL,
+                mask_path TEXT,
+                crop_path TEXT,
+                features_json TEXT NOT NULL,
+                info_score REAL NOT NULL,
+                detected_label TEXT,
+                confidence REAL,
+                quality_json TEXT NOT NULL,
+                safety_status TEXT NOT NULL,
+                FOREIGN KEY (capture_id) REFERENCES captures(id)
+            );
+            CREATE TABLE IF NOT EXISTS daily_quotas (
+                user_id TEXT NOT NULL,
+                quota_date TEXT NOT NULL,
+                captures_used INTEGER NOT NULL DEFAULT 0,
+                mechs_used INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (user_id, quota_date)
+            );
             """
         )
+        try:
+            self._conn.execute("ALTER TABLE mechs ADD COLUMN art_url TEXT")
+        except sqlite3.OperationalError:
+            pass
         self._conn.commit()
 
     def create_user(self, name: str) -> UserRow:
@@ -132,10 +167,19 @@ class Database:
         assert user is not None
         return user.rating
 
-    def save_mech(self, user_id: str, mech_id: str, object_id: str, form: str, name: str, stats: dict[str, int]) -> None:
+    def save_mech(
+        self,
+        user_id: str,
+        mech_id: str,
+        object_id: str,
+        form: str,
+        name: str,
+        stats: dict[str, int],
+        art_url: str | None = None,
+    ) -> None:
         self._conn.execute(
-            "INSERT INTO mechs (id, user_id, object_id, form, name, stats_json) VALUES (?, ?, ?, ?, ?, ?)",
-            (mech_id, user_id, object_id, form, name, json.dumps(stats)),
+            "INSERT INTO mechs (id, user_id, object_id, form, name, stats_json, art_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (mech_id, user_id, object_id, form, name, json.dumps(stats), art_url),
         )
         self._conn.commit()
 
@@ -150,6 +194,7 @@ class Database:
             "form": row["form"],
             "name": row["name"],
             "stats": json.loads(row["stats_json"]),
+            "art_url": row["art_url"],
         }
 
     def list_mechs(self, user_id: str) -> list[dict[str, Any]]:
@@ -162,6 +207,7 @@ class Database:
                 "form": row["form"],
                 "name": row["name"],
                 "stats": json.loads(row["stats_json"]),
+                "art_url": row["art_url"],
             }
             for row in rows
         ]
@@ -326,3 +372,136 @@ class Database:
             (user_id,),
         ).fetchall()
         return [{"key": row["entitlement_key"], "is_active": bool(row["is_active"])} for row in rows]
+
+    def save_capture(
+        self,
+        capture_id: str,
+        user_id: str,
+        original_path: str,
+        perceptual_hash: str,
+        safety_status: str,
+        quality_json: dict[str, Any],
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO captures (
+                id, user_id, original_path, perceptual_hash, safety_status, quality_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                capture_id,
+                user_id,
+                original_path,
+                perceptual_hash,
+                safety_status,
+                json.dumps(quality_json),
+                datetime.now(UTC).isoformat(),
+            ),
+        )
+        self._conn.commit()
+
+    def get_capture(self, capture_id: str) -> dict[str, Any] | None:
+        row = self._conn.execute("SELECT * FROM captures WHERE id = ?", (capture_id,)).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "user_id": row["user_id"],
+            "original_path": row["original_path"],
+            "perceptual_hash": row["perceptual_hash"],
+            "safety_status": row["safety_status"],
+            "quality": json.loads(row["quality_json"]) if row["quality_json"] else {},
+        }
+
+    def list_capture_hashes(self, user_id: str) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT perceptual_hash FROM captures WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
+            (user_id,),
+        ).fetchall()
+        return [row["perceptual_hash"] for row in rows]
+
+    def save_extracted_object(
+        self,
+        object_id: str,
+        capture_id: str,
+        bbox_json: list[float],
+        mask_path: str,
+        crop_path: str,
+        features_json: dict[str, float],
+        info_score: float,
+        detected_label: str,
+        confidence: float,
+        quality_json: dict[str, float],
+        safety_status: str,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO extracted_objects (
+                id, capture_id, bbox_json, mask_path, crop_path, features_json,
+                info_score, detected_label, confidence, quality_json, safety_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                object_id,
+                capture_id,
+                json.dumps(bbox_json),
+                mask_path,
+                crop_path,
+                json.dumps(features_json),
+                info_score,
+                detected_label,
+                confidence,
+                json.dumps(quality_json),
+                safety_status,
+            ),
+        )
+        self._conn.commit()
+
+    def get_extracted_object(self, object_id: str) -> dict[str, Any] | None:
+        row = self._conn.execute("SELECT * FROM extracted_objects WHERE id = ?", (object_id,)).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "capture_id": row["capture_id"],
+            "bbox": json.loads(row["bbox_json"]),
+            "mask_path": row["mask_path"],
+            "crop_path": row["crop_path"],
+            "features": json.loads(row["features_json"]),
+            "info_score": row["info_score"],
+            "detected_label": row["detected_label"],
+            "confidence": row["confidence"],
+            "quality": json.loads(row["quality_json"]),
+            "safety_status": row["safety_status"],
+        }
+
+    def _today(self) -> str:
+        return datetime.now(UTC).date().isoformat()
+
+    def increment_quota(self, user_id: str, field: str) -> None:
+        if field not in {"captures_used", "mechs_used"}:
+            raise ValueError(f"unsupported quota field: {field}")
+        quota_date = self._today()
+        self._conn.execute(
+            f"""
+            INSERT INTO daily_quotas (user_id, quota_date, captures_used, mechs_used)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, quota_date) DO UPDATE SET {field} = {field} + 1
+            """,
+            (
+                user_id,
+                quota_date,
+                1 if field == "captures_used" else 0,
+                1 if field == "mechs_used" else 0,
+            ),
+        )
+        self._conn.commit()
+
+    def get_quota_usage(self, user_id: str) -> dict[str, int]:
+        row = self._conn.execute(
+            "SELECT captures_used, mechs_used FROM daily_quotas WHERE user_id = ? AND quota_date = ?",
+            (user_id, self._today()),
+        ).fetchone()
+        if row is None:
+            return {"captures_used": 0, "mechs_used": 0}
+        return {"captures_used": row["captures_used"], "mechs_used": row["mechs_used"]}

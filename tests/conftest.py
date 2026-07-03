@@ -13,11 +13,11 @@ C1_MIN = 80.0
 
 
 @pytest.fixture(autouse=True)
-def fresh_game_store(monkeypatch):
+def fresh_game_store(monkeypatch, tmp_path):
     from photo_mecha_battle.api import app as app_module
 
     db = Database(":memory:")
-    game_store = GameStore(db)
+    game_store = GameStore(db, data_dir=tmp_path / "media")
     monkeypatch.setattr(app_module, "store", game_store)
     yield game_store
     db.close()
