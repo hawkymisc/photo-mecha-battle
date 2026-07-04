@@ -138,11 +138,15 @@
 
 注意：`extra_tactic_slots` は「保存枠」の拡張であり、ランク戦で使用できる戦術スロット数を増やすものではない。
 
-> **現行実装の注記**: 現行の webhook スタブは購入系イベントで `premium_tactics` と `generation_boost` を
-> 一括で有効化する簡易実装である。また、クォータ拡大の判定も `premium_tactics` **または** `generation_boost`
-> のいずれかが有効なら適用される（[`api/limits.py`](../src/photo_mecha_battle/api/limits.py)）。本仕様では**クォータ拡大は `generation_boost` のみ**に
-> 紐づくのが正であり、商品と Entitlement の対応が RevenueCat ダッシュボードで確定した時点で、
-> イベント内の entitlement 情報に基づく個別付与＋キー別の機能ゲートに置き換える（PLAN D-005 参照）。
+> **実装状態（PLAN D-005 対応済み）**: Webhook はイベントペイロードの `entitlement_ids`（RevenueCat が
+> 商品↔Entitlement の対応を解決した結果）をそのまま個別に付与/失効する
+> （[`game_store.apply_revenuecat_event`](../src/photo_mecha_battle/api/game_store.py)）。サーバー側で商品IDごとの
+> 対応表をハードコードする必要はない。`event.id` による冪等性チェック（再送時の二重付与防止）、
+> `Authorization` ヘッダーによる Webhook 認証（[`require_revenuecat_webhook_auth`](../src/photo_mecha_battle/api/app.py)、
+> 共有シークレット未設定時は常に 401 で無効化）も実装済み。
+> 残るのは RevenueCat ダッシュボード側の外部設定（商品定義・Entitlement 紐付け、Webhook 共有シークレットの発行）のみで、
+> これはコードでは解決できないため [`config/revenuecat_pending_setup.json`](../config/revenuecat_pending_setup.json) に切り出して追跡する。
+> なお、クォータ拡大の判定は `generation_boost` のみに紐づく（[`api/limits.py`](../src/photo_mecha_battle/api/limits.py)）。
 
 ### Webhook イベント処理（MVP）
 

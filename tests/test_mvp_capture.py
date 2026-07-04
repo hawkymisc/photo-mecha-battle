@@ -26,10 +26,6 @@ def _image_bytes() -> bytes:
     return buffer.getvalue()
 
 
-def _register() -> dict:
-    return client.post("/auth/register", json={"name": "MVP"}).json()
-
-
 def test_photo_upload_pipeline(auth_headers):
     headers = {"X-User-Token": auth_headers["X-User-Token"]}
     upload = client.post(
@@ -81,39 +77,6 @@ def test_quotas_endpoint(auth_headers):
     quotas = client.get("/users/quotas", headers=headers).json()
     assert quotas["captures"]["limit"] == FREE_DAILY_CAPTURES
     assert quotas["mechs"]["limit"] == FREE_DAILY_MECHS
-
-
-def test_revenuecat_webhook_grants_entitlements():
-    user = _register()
-    response = client.post(
-        "/billing/revenuecat/webhook",
-        json={
-            "event": {
-                "type": "INITIAL_PURCHASE",
-                "app_user_id": user["user_id"],
-            }
-        },
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["applied"] is True
-    keys = {item["key"] for item in body["entitlements"] if item["is_active"]}
-    assert keys == {"premium_tactics", "extra_tactic_slots", "battle_log_summary", "generation_boost"}
-
-
-def test_revenuecat_cancellation_revokes_entitlements():
-    user = _register()
-    client.post(
-        "/billing/revenuecat/webhook",
-        json={"event": {"type": "INITIAL_PURCHASE", "app_user_id": user["user_id"]}},
-    )
-    response = client.post(
-        "/billing/revenuecat/webhook",
-        json={"event": {"type": "CANCELLATION", "app_user_id": user["user_id"]}},
-    )
-    body = response.json()
-    assert body["applied"] is True
-    assert all(not item["is_active"] for item in body["entitlements"])
 
 
 def test_face_like_capture_is_blocked(auth_headers):

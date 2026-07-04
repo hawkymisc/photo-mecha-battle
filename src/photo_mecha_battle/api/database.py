@@ -127,6 +127,12 @@ class Database:
                 mechs_used INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (user_id, quota_date)
             );
+            CREATE TABLE IF NOT EXISTS processed_webhook_events (
+                event_id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                app_user_id TEXT NOT NULL,
+                processed_at TEXT NOT NULL
+            );
             """
         )
         try:
@@ -413,6 +419,23 @@ class Database:
             (user_id,),
         ).fetchall()
         return [{"key": row["entitlement_key"], "is_active": bool(row["is_active"])} for row in rows]
+
+    def is_webhook_event_processed(self, event_id: str) -> bool:
+        """PLAN D-005: RevenueCat Webhook の冪等性チェック（同一 event_id の再送を検出する）。"""
+        row = self._conn.execute(
+            "SELECT 1 FROM processed_webhook_events WHERE event_id = ?", (event_id,)
+        ).fetchone()
+        return row is not None
+
+    def mark_webhook_event_processed(self, event_id: str, event_type: str, app_user_id: str) -> None:
+        self._conn.execute(
+            """
+            INSERT OR IGNORE INTO processed_webhook_events (event_id, event_type, app_user_id, processed_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (event_id, event_type, app_user_id, datetime.now(UTC).isoformat()),
+        )
+        self._conn.commit()
 
     def save_capture(
         self,

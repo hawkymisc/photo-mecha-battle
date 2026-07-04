@@ -323,20 +323,8 @@ class GameStore:
 
         return battle
 
-    # docs/06 Product/Package案: Monthly/Annual Premium = 自然言語戦術生成 + 保存枠拡張 +
-    # ログ要約 + 生成クォータ拡大。いずれも利便性・表現機能であり、戦闘性能や戦術スロット数・
-    # 使用可能条件/行動には影響しない（generation_boost は「試行回数」のみを増やす。docs/06 公平性の整理）。
-    # 商品↔Entitlement の個別対応が RevenueCat ダッシュボードで確定するまでは一括付与の簡易実装とする
-    # （PLAN D-005）。
-    _PREMIUM_BUNDLE_ENTITLEMENTS = (
-        "premium_tactics",
-        "extra_tactic_slots",
-        "battle_log_summary",
-        "generation_boost",
-    )
-
-    # docs/06 Entitlement案の全量。docs/07 の POST /billing/sync はこの集合に限定して
-    # クライアント CustomerInfo を反映する（未知キーは無視し、戦闘系の権限拡張を防ぐ）。
+    # docs/06 Entitlement案の全量。docs/07 の POST /billing/sync、および Webhook 個別付与
+    # （PLAN D-005）はこの集合に限定して反映する（未知キーは無視し、戦闘系の権限拡張を防ぐ）。
     KNOWN_ENTITLEMENT_KEYS = (
         "premium_tactics",
         "extra_tactic_slots",
@@ -344,6 +332,12 @@ class GameStore:
         "cosmetic_pack_access",
         "generation_boost",
     )
+
+    # docs/06 Webhook イベント処理（MVP）表に対応。
+    _GRANT_EVENT_TYPES = frozenset(
+        {"INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE", "PRODUCT_CHANGE", "UNCANCELLATION"}
+    )
+    _REVOKE_EVENT_TYPES = frozenset({"CANCELLATION", "EXPIRATION"})
 
     def sync_client_entitlements(self, user_id: str, active_keys: list[str]) -> dict[str, object]:
         """docs/07 POST /billing/sync: クライアントの CustomerInfo とサーバー状態の同期。
@@ -357,19 +351,44 @@ class GameStore:
             self.db.set_entitlement(user_id, key, key in active_set)
         return {"entitlements": self.db.get_entitlements(user_id)}
 
-    def apply_revenuecat_event(self, app_user_id: str, event_type: str) -> dict[str, object]:
+    def apply_revenuecat_event(
+        self,
+        event_id: str,
+        app_user_id: str,
+        event_type: str,
+        entitlement_ids: list[str],
+    ) -> dict[str, object]:
+        """docs/06 Webhook イベント処理（PLAN D-005）。
+
+        RevenueCat は商品(Product)↔Entitlement の対応をダッシュボード側で解決し、Webhook イベントの
+        `entitlement_ids` に「そのイベントで有効/無効になる Entitlement」を含めて送ってくる。
+        そのためサーバー側で商品IDごとの対応表をハードコードする必要はなく、`entitlement_ids` を
+        そのまま個別に反映すればよい（商品↔Entitlement 対応自体の確定は外部設定。
+        `config/revenuecat_pending_setup.json` 参照）。
+        `event_id` を用いた冪等性チェックにより、Webhook 再送時の二重付与/二重失効を防ぐ。
+        """
+        if event_type not in self._GRANT_EVENT_TYPES and event_type not in self._REVOKE_EVENT_TYPES:
+            return {"applied": False, "reason": "ignored_event"}
+
         user = self.db.get_user(app_user_id)
         if user is None:
             return {"applied": False, "reason": "user_not_found"}
-        if event_type in {"INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE", "PRODUCT_CHANGE"}:
-            for key in self._PREMIUM_BUNDLE_ENTITLEMENTS:
-                self.db.set_entitlement(app_user_id, key, True)
-            return {"applied": True, "entitlements": self.db.get_entitlements(app_user_id)}
-        if event_type in {"CANCELLATION", "EXPIRATION"}:
-            for key in self._PREMIUM_BUNDLE_ENTITLEMENTS:
-                self.db.set_entitlement(app_user_id, key, False)
-            return {"applied": True, "entitlements": self.db.get_entitlements(app_user_id)}
-        return {"applied": False, "reason": "ignored_event"}
+
+        if self.db.is_webhook_event_processed(event_id):
+            return {"applied": False, "reason": "duplicate_event"}
+
+        if not entitlement_ids:
+            return {"applied": False, "reason": "missing_entitlement_ids"}
+
+        known_keys = [key for key in entitlement_ids if key in self.KNOWN_ENTITLEMENT_KEYS]
+        if not known_keys:
+            return {"applied": False, "reason": "no_known_entitlements"}
+
+        is_active = event_type in self._GRANT_EVENT_TYPES
+        for key in known_keys:
+            self.db.set_entitlement(app_user_id, key, is_active)
+        self.db.mark_webhook_event_processed(event_id, event_type, app_user_id)
+        return {"applied": True, "entitlements": self.db.get_entitlements(app_user_id)}
 
     def _ensure_capture_quota(self, user_id: str) -> None:
         quotas = self.get_user_quotas(user_id)

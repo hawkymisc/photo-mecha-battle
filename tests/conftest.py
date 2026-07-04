@@ -15,6 +15,10 @@ C1_MIN = 80.0
 # リクエストのみ許可する（テスト環境専用の固定シークレット）。
 ADMIN_TOKEN = "test-admin-secret"
 
+# PLAN D-005: POST /billing/revenuecat/webhook はこの値を Authorization ヘッダーで送った
+# リクエストのみ許可する（テスト環境専用の固定シークレット）。
+REVENUECAT_WEBHOOK_SECRET = "test-revenuecat-secret"
+
 
 @pytest.fixture(autouse=True)
 def fresh_game_store(monkeypatch, tmp_path):
@@ -24,6 +28,7 @@ def fresh_game_store(monkeypatch, tmp_path):
     game_store = GameStore(db, data_dir=tmp_path / "media")
     monkeypatch.setattr(app_module, "store", game_store)
     monkeypatch.setenv("PMB_ADMIN_TOKEN", ADMIN_TOKEN)
+    monkeypatch.setenv("PMB_REVENUECAT_WEBHOOK_SECRET", REVENUECAT_WEBHOOK_SECRET)
     yield game_store
     db.close()
 
