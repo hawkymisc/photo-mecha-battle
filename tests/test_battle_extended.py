@@ -407,3 +407,17 @@ def test_select_targets_when_primary_is_dead():
     enemy_team = Team(id="b", name="B", slots=[dead_primary, living])
     targets = engine._select_targets(actor, enemy_team, ActionType.NORMAL_ATTACK, dead_primary)
     assert targets == [living]
+
+
+def test_disrupt_stays_a_deterministic_low_power_attack_pending_status_effect_design():
+    """PLAN D-006 (blocked): 状態異常システム未設計のため `disrupt` は能力低下効果を持たず、
+
+    決定的な低威力攻撃（威力 0.4、能力低下や追加効果なし）のままであることが暫定の受入基準。
+    状態異常システムの設計・実装時に、この暫定挙動を意図的に変更したことが分かるよう
+    回帰テストとして固定する（docs/04 行動候補注記 / config/po_pending_decisions.json 参照）。
+    """
+    profile = ACTION_PROFILES[ActionType.DISRUPT]
+    assert profile["power"] == 0.4
+    assert profile.get("targets") == 1
+    # 能力低下・状態異常フラグ（例: "debuff", "status_effect"）がまだ存在しないことを確認する。
+    assert set(profile.keys()) == {"power", "en_cost", "targets"}
