@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PHOTO MECHA BATTLE — 操作端末</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="hud-frame">
+
+  <header class="hud-topbar">
+    <div class="hud-title">
+      <span class="kicker">Pilot Console</span>
+      <h1>PHOTO MECHA BATTLE</h1>
+    </div>
+    <div class="hud-user" id="user-box" hidden>
+      <span>PILOT: <strong id="user-name">-</strong></span>
+      <span class="rating-chip">RT <span id="user-rating">-</span></span>
+      <span id="user-quota">-</span>
+      <button class="ghost-btn" id="logout-btn">ログアウト</button>
+    </div>
+  </header>
+
+  <!-- 0: 登録 -->
+  <section class="panel" id="panel-auth">
+    <div class="panel-head">
+      <div>
+        <div class="step">STEP 00</div>
+        <h2>パイロット登録</h2>
+      </div>
+    </div>
+    <p class="panel-sub">名前を入力して出撃準備を始めてください。ブラウザにトークンを保存し、次回以降は自動でログインします。</p>
+    <div class="field-row">
+      <div class="field">
+        <label for="register-name">パイロット名</label>
+        <input type="text" id="register-name" placeholder="例: ハヤブサ" maxlength="24" />
+      </div>
+    </div>
+    <button class="primary-btn" id="register-btn">出撃準備を始める</button>
+  </section>
+
+  <!-- 1: 撮影→メカ生成 -->
+  <section class="panel" id="panel-capture" hidden>
+    <div class="panel-head">
+      <div>
+        <div class="step">STEP 01</div>
+        <h2>撮影 → メカ生成</h2>
+      </div>
+    </div>
+    <p class="panel-sub">身の回りの物を撮影・アップロードすると、写真から抽出した特徴量をもとにメカが生成されます。戦闘性能は見た目ではなく分析値で決まります。</p>
+
+    <label class="dropzone" id="dropzone">
+      <span id="dropzone-hint">クリックして写真を選択</span>
+      <input type="file" id="capture-file" accept="image/*" />
+    </label>
+
+    <div class="field-row" style="margin-top:16px;">
+      <div class="field">
+        <label for="mech-name">メカ名</label>
+        <input type="text" id="mech-name" placeholder="例: アンブレラガード" maxlength="20" />
+      </div>
+      <div class="field">
+        <label>メカ型</label>
+        <div class="radio-group" id="form-group">
+          <label class="radio-chip active"><input type="radio" name="mech-form" value="bird" checked />鳥形（速さ）</label>
+          <label class="radio-chip"><input type="radio" name="mech-form" value="human" />人型（バランス）</label>
+          <label class="radio-chip"><input type="radio" name="mech-form" value="beast" />獣形（装甲）</label>
+        </div>
+      </div>
+    </div>
+
+    <button class="primary-btn" id="build-mech-btn" disabled>この写真からメカを作る</button>
+  </section>
+
+  <!-- 2: 保有メカ一覧 -->
+  <section class="panel" id="panel-mechs" hidden>
+    <div class="panel-head">
+      <div>
+        <div class="step">STEP 02</div>
+        <h2>格納庫（保有メカ）</h2>
+      </div>
+    </div>
+    <p class="panel-sub">出撃には3体必要です（前衛・中衛・後衛）。同じメカを複数の位置に使うこともできます。</p>
+    <div class="mech-grid" id="mech-grid">
+      <div class="empty-hint">まだメカがありません。STEP 01 でメカを作りましょう。</div>
+    </div>
+  </section>
+
+  <!-- 3: 出撃編成 -->
+  <section class="panel" id="panel-deploy" hidden>
+    <div class="panel-head">
+      <div>
+        <div class="step">STEP 03</div>
+        <h2>出撃編成</h2>
+      </div>
+    </div>
+    <p class="panel-sub">各位置にメカと戦術プリセットを割り当ててください。戦術は「上から順に条件を評価し、最初に成立した行動を実行」します。</p>
+    <div class="deploy-grid" id="deploy-grid"></div>
+    <button class="primary-btn" id="battle-btn" disabled>CPU戦に出撃する</button>
+  </section>
+
+  <!-- 4: バトルログ -->
+  <section class="panel" id="panel-battle" hidden>
+    <div class="panel-head">
+      <div>
+        <div class="step">STEP 04</div>
+        <h2>バトルログ</h2>
+      </div>
+    </div>
+    <div id="battle-result"></div>
+  </section>
+
+  <!-- 5: ランキング -->
+  <section class="panel" id="panel-ranking" hidden>
+    <div class="panel-head">
+      <div>
+        <div class="step">STEP 05</div>
+        <h2>ランキング</h2>
+      </div>
+      <button class="secondary-btn" id="refresh-ranking-btn">更新</button>
+    </div>
+    <table class="rank-table">
+      <thead><tr><th>#</th><th>チーム</th><th>レーティング</th></tr></thead>
+      <tbody id="ranking-body"></tbody>
+    </table>
+  </section>
+
+</div>
+
+<div id="toast-stack"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

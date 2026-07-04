@@ -28,6 +28,13 @@ store = GameStore(db=Database(":memory:"), data_dir=DATA_DIR)
 app = FastAPI(title="Photo Mecha Battle API", version="0.3.0")
 app.mount("/media", StaticFiles(directory=str(store.image_storage.root)), name="media")
 
+# 簡易Webクライアント（撮影→メカ生成→編成→バトルを一気通貫で試せるデモUI）。
+# バックエンドAPIの薄いフロントに過ぎず、バトル結果自体はサーバー側の既存エンドポイントで
+# 決定される（docs/09 信頼モデル）。モバイルクライアント本体（P25-007）はスコープ外のまま。
+_WEB_CLIENT_DIR = Path(os.environ.get("PMB_WEB_DIR", str(Path(__file__).resolve().parents[3] / "web")))
+if _WEB_CLIENT_DIR.is_dir():
+    app.mount("/app", StaticFiles(directory=str(_WEB_CLIENT_DIR), html=True), name="web_client")
+
 
 def get_store() -> GameStore:
     return store
