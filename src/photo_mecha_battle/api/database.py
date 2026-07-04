@@ -365,6 +365,8 @@ class Database:
             return None
         return {
             "id": row["id"],
+            "player_a_id": row["player_a_id"],
+            "player_b_id": row["player_b_id"],
             "seed": row["seed"],
             "winner_team_id": row["winner_team_id"],
             "turns": row["turns"],

@@ -406,6 +406,11 @@ class GameStore:
         result = record.result
         return {
             "id": record.id,
+            # docs/07 所有権: デモ用 POST /battles（永続チーム不要）はユーザーに紐づかないため
+            # player_a_id は常に None。GET /battles/{id} 側で「所有者なし = 認証済みなら誰でも
+            # 閲覧可」として扱う（PLAN D-008）。
+            "player_a_id": None,
+            "player_b_id": None,
             "seed": result.seed,
             "winner_team_id": result.winner_team_id,
             "turns": result.turns,
