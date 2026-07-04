@@ -204,9 +204,10 @@ FinalDamage = int(max(1,
 | damage_events | 対象ごとの（対象 ID、対象名、ダメージ、撃破フラグ）の列 |
 | note | 非ダメージ行動の効果説明（「防御態勢を取る」「ENを25回復」等） |
 
-> **実装差分**: 現行 DB（`battles.log_text`）は整形済みテキストのみを保存している。
-> クライアント演出再生（[`docs/09`](09_lightweight_server_architecture.md)）には構造化ログが必要であり、構造化 JSON での保存が本仕様の正。
-> → 修正タスク（PLAN 参照）。
+> **実装状態（PLAN D-003 対応済み）**: `battles.log_json` に上記フィールドを持つ配列を JSON 保存し、
+> `GET /battles/{id}` のレスポンス `log_entries` として返す（[`battle_log_serde.py`](../src/photo_mecha_battle/battle_log_serde.py)）。
+> 表示用の整形テキスト `log_text`（レスポンスの `log`）も引き続き保存する。
+> マイグレーション前の既存行（`log_json` が NULL）は `log_entries: null` を返し、呼び出し側は `log` にフォールバックする。
 
 ### 表示例
 

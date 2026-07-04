@@ -14,6 +14,7 @@ from photo_mecha_battle.api.image_storage import ImageStorage
 from photo_mecha_battle.api.limits import limits_for_user
 from photo_mecha_battle.api.store import InMemoryStore, CaptureRecord, ObjectRecord, build_demo_cpu_team
 from photo_mecha_battle.battle import BattleEngine, BattleResult
+from photo_mecha_battle.battle_log_serde import battle_log_to_payload
 from photo_mecha_battle.models import Mech, MechForm, MechStats, Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticSet
 from photo_mecha_battle.tactics_serde import tactic_set_from_payload, tactic_set_to_payload
@@ -303,6 +304,7 @@ class GameStore:
             battle.result.winner_team_id,
             battle.result.turns,
             battle.result.format_log(),
+            battle_log_to_payload(battle.result.log_entries),
         )
 
         if battle.result.winner_team_id == player_team.id:
@@ -423,6 +425,8 @@ class GameStore:
             "winner_team_id": result.winner_team_id,
             "turns": result.turns,
             "log": result.format_log(),
+            # PLAN D-003: 永続 DB 経由と同じ構造化ログ形式をデモ戦でも返す。
+            "log_entries": battle_log_to_payload(result.log_entries),
         }
 
     def get_object_analysis(self, object_id: str) -> dict[str, object] | None:

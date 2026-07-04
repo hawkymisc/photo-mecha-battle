@@ -181,6 +181,23 @@ def test_ranked_battle_without_seed_field_still_succeeds():
     assert isinstance(response.json()["seed"], int)
 
 
+def test_ranked_battle_view_includes_structured_log_entries():
+    """PLAN D-003 / docs/05: GET /battles/{id} が構造化ログ（log_entries）を返す。"""
+    user = _register("LogViewer")
+    team = _build_team_assets(user["token"])
+    battle = client.post(
+        "/battles/ranked",
+        json={"team_id": team["id"]},
+        headers=_headers(user["token"]),
+    ).json()
+
+    fetched = client.get(f"/battles/{battle['id']}", headers=_headers(user["token"])).json()
+    assert fetched["log_entries"], "structured log entries should not be empty"
+    first = fetched["log_entries"][0]
+    assert {"turn", "actor_team", "actor_position", "actor_name", "condition_label", "action", "damage_events", "note"} <= first.keys()
+    assert first["turn"] == 1
+
+
 def test_team_update_roundtrip():
     user = _register("Editor")
     team = _build_team_assets(user["token"])

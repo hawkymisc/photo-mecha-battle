@@ -44,6 +44,8 @@ def test_vertical_slice_via_api(auth_headers):
 
     fetched = client.get(f"/battles/{battle['id']}", headers=headers).json()
     assert fetched["log"] == battle["log"]
+    assert fetched["log_entries"], "demo battles should also expose structured log entries"
+    assert fetched["log_entries"][0]["turn"] == 1
 
 
 def test_tactic_presets_listed():

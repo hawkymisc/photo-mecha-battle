@@ -87,6 +87,7 @@ class Database:
                 winner_team_id TEXT,
                 turns INTEGER NOT NULL,
                 log_text TEXT NOT NULL,
+                log_json TEXT,
                 created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS user_entitlements (
@@ -130,6 +131,12 @@ class Database:
         )
         try:
             self._conn.execute("ALTER TABLE mechs ADD COLUMN art_url TEXT")
+        except sqlite3.OperationalError:
+            pass
+        # PLAN D-003 / docs/05: 構造化バトルログ列。既存 DB（この列が無い battles テーブル）に対する
+        # 後方互換マイグレーション。列が既に存在する場合は無視する。
+        try:
+            self._conn.execute("ALTER TABLE battles ADD COLUMN log_json TEXT")
         except sqlite3.OperationalError:
             pass
         self._conn.commit()
@@ -336,13 +343,17 @@ class Database:
         winner_team_id: str | None,
         turns: int,
         log_text: str,
+        log_entries: list[dict[str, Any]] | None = None,
     ) -> None:
+        # PLAN D-003 / docs/05: log_text（表示用整形テキスト）に加え、クライアント演出再生に必要な
+        # 構造化ログ（turn/actor/condition_label/action/damage_events）を log_json に保存する。
+        log_json = json.dumps(log_entries) if log_entries is not None else None
         self._conn.execute(
             """
             INSERT INTO battles (
                 id, player_a_id, player_b_id, team_a_id, team_b_id,
-                seed, winner_team_id, turns, log_text, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                seed, winner_team_id, turns, log_text, log_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 battle_id,
@@ -354,6 +365,7 @@ class Database:
                 winner_team_id,
                 turns,
                 log_text,
+                log_json,
                 datetime.now(UTC).isoformat(),
             ),
         )
@@ -363,6 +375,9 @@ class Database:
         row = self._conn.execute("SELECT * FROM battles WHERE id = ?", (battle_id,)).fetchone()
         if row is None:
             return None
+        # docs/05 実装差分: log_json が無い行（マイグレーション前の既存データ）は
+        # log_entries を None のまま返し、呼び出し側は log（整形テキスト）にフォールバックする。
+        log_json = row["log_json"] if "log_json" in row.keys() else None
         return {
             "id": row["id"],
             "player_a_id": row["player_a_id"],
@@ -371,6 +386,7 @@ class Database:
             "winner_team_id": row["winner_team_id"],
             "turns": row["turns"],
             "log": row["log_text"],
+            "log_entries": json.loads(log_json) if log_json else None,
         }
 
     def get_ranking(self, limit: int = 20) -> list[dict[str, Any]]:
