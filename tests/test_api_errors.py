@@ -82,8 +82,13 @@ def test_battle_rejects_unknown_mech():
     assert response.status_code == 404
 
 
-def test_get_unknown_battle_returns_404():
-    assert client.get("/battles/missing").status_code == 404
+def test_get_unknown_battle_returns_404(auth_headers):
+    headers = {"X-User-Token": auth_headers["X-User-Token"]}
+    assert client.get("/battles/missing", headers=headers).status_code == 404
+
+
+def test_get_battle_without_token_returns_401():
+    assert client.get("/battles/missing").status_code == 401
 
 
 def test_get_mech_and_ranking_endpoints(auth_headers):

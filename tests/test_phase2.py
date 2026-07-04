@@ -274,6 +274,86 @@ def test_ranked_battle_against_cpu_updates_rating():
     assert client.get("/ranking").json()["entries"]
 
 
+def test_ranked_battle_view_requires_authentication():
+    user = _register("ViewerNoAuth")
+    team = _build_team_assets(user["token"])
+    battle = client.post(
+        "/battles/ranked",
+        json={"team_id": team["id"], "seed": 3},
+        headers=_headers(user["token"]),
+    ).json()
+    response = client.get(f"/battles/{battle['id']}")
+    assert response.status_code == 401
+
+
+def test_ranked_battle_view_forbidden_for_third_party():
+    player_a = _register("ViewA")
+    player_b = _register("ViewB")
+    outsider = _register("Outsider")
+    team_a = _build_team_assets(player_a["token"])
+    team_b = _build_team_assets(player_b["token"], label="stone")
+
+    client.post("/battles/match", json={"team_id": team_a["id"]}, headers=_headers(player_a["token"]))
+    client.post("/battles/match", json={"team_id": team_b["id"]}, headers=_headers(player_b["token"]))
+    battle = client.post(
+        "/battles/ranked",
+        json={"team_id": team_a["id"], "seed": 11},
+        headers=_headers(player_a["token"]),
+    ).json()
+
+    forbidden = client.get(f"/battles/{battle['id']}", headers=_headers(outsider["token"]))
+    assert forbidden.status_code == 403
+
+    as_a = client.get(f"/battles/{battle['id']}", headers=_headers(player_a["token"]))
+    assert as_a.status_code == 200
+    as_b = client.get(f"/battles/{battle['id']}", headers=_headers(player_b["token"]))
+    assert as_b.status_code == 200
+
+
+def test_cpu_ranked_battle_view_restricted_to_player_a():
+    user = _register("CpuSolo")
+    outsider = _register("CpuOutsider")
+    team = _build_team_assets(user["token"])
+    battle = client.post(
+        "/battles/ranked",
+        json={"team_id": team["id"], "seed": 5},
+        headers=_headers(user["token"]),
+    ).json()
+
+    forbidden = client.get(f"/battles/{battle['id']}", headers=_headers(outsider["token"]))
+    assert forbidden.status_code == 403
+    allowed = client.get(f"/battles/{battle['id']}", headers=_headers(user["token"]))
+    assert allowed.status_code == 200
+
+
+def test_demo_battle_view_allowed_for_any_authenticated_user():
+    user = _register("DemoViewer")
+    capture = client.post("/captures", json={"label": "umbrella"}).json()
+    segment = client.post(f"/captures/{capture['id']}/segment", json={"label": "umbrella"}).json()
+    mech = client.post(
+        "/mechs",
+        json={"object_id": segment["id"], "form": "bird", "name": "デモメカ"},
+        headers=_headers(user["token"]),
+    ).json()
+    battle = client.post(
+        "/battles",
+        json={
+            "team_name": "Demo Team",
+            "seed": 9,
+            "slots": [
+                {"mech_id": mech["id"], "position": "front", "preset": "melee"},
+                {"mech_id": mech["id"], "position": "middle", "preset": "bombardment"},
+                {"mech_id": mech["id"], "position": "back", "preset": "sniper"},
+            ],
+        },
+    ).json()
+
+    unauthenticated = client.get(f"/battles/{battle['id']}")
+    assert unauthenticated.status_code == 401
+    fetched = client.get(f"/battles/{battle['id']}", headers=_headers(user["token"]))
+    assert fetched.status_code == 200
+
+
 def test_billing_entitlement_stub():
     user = _register("Buyer")
     status = client.get("/billing/status", headers=_headers(user["token"])).json()

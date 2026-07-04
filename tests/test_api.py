@@ -38,7 +38,11 @@ def test_vertical_slice_via_api(auth_headers):
 
     assert battle["seed"] == 42
     assert "Turn 1" in battle["log"]
-    fetched = client.get(f"/battles/{battle['id']}").json()
+
+    unauthenticated = client.get(f"/battles/{battle['id']}")
+    assert unauthenticated.status_code == 401
+
+    fetched = client.get(f"/battles/{battle['id']}", headers=headers).json()
     assert fetched["log"] == battle["log"]
 
 

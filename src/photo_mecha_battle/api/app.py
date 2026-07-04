@@ -34,9 +34,12 @@ def get_store() -> GameStore:
 
 
 def require_user(
-    x_user_token: Annotated[str, Header()],
+    x_user_token: Annotated[str | None, Header()] = None,
     game_store: GameStore = Depends(get_store),
 ) -> UserRow:
+    # docs/07 API 共通規約: X-User-Token の「欠落・無効」はいずれも 401 とする。
+    if x_user_token is None:
+        raise HTTPException(status_code=401, detail="missing token")
     user = game_store.authenticate(x_user_token)
     if user is None:
         raise HTTPException(status_code=401, detail="invalid token")
@@ -479,10 +482,21 @@ def create_battle(body: BattleCreateRequest, game_store: GameStore = Depends(get
 
 
 @app.get("/battles/{battle_id}")
-def get_battle(battle_id: str, game_store: GameStore = Depends(get_store)):
+def get_battle(
+    battle_id: str,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
     record = game_store.get_battle_record(battle_id)
     if record is None:
         raise HTTPException(status_code=404, detail="battle not found")
+    # docs/07 所有権 / PLAN D-008: 対戦当事者 (player_a / player_b) のみ参照可。
+    # CPU 戦は player_b_id が無いため player_a のみ。所有者なし（デモ用 POST /battles）は
+    # 認証済みユーザーなら誰でも閲覧可とする。
+    player_a_id = record.get("player_a_id")
+    player_b_id = record.get("player_b_id")
+    if player_a_id is not None and user.id not in {player_a_id, player_b_id}:
+        raise HTTPException(status_code=403, detail="forbidden")
     return record
 
 
