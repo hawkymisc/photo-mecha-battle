@@ -94,7 +94,9 @@ class MatchRequest(BaseModel):
 
 class RankedBattleRequest(BaseModel):
     team_id: str
-    seed: int = 42
+    # docs/09 信頼モデル / PLAN D-007: ランク戦の seed は常にサーバーが生成する。
+    # クライアントがこのフィールドを送っても後方互換のため 400 にはせず、単に無視する。
+    seed: int | None = None
 
 
 class BattleSlotRequest(BaseModel):
@@ -437,7 +439,6 @@ def create_ranked_battle(
         opponent_tactics,
         opponent_user,
         opponent_row,
-        body.seed,
     )
     result = battle.result
     return {

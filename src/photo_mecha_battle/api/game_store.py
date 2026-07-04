@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import uuid
 from pathlib import Path
 
@@ -269,6 +270,13 @@ class GameStore:
     def find_opponent(self, user_id: str, rating: int) -> TeamRow | None:
         return self.db.find_queued_opponent(user_id, rating)
 
+    # docs/09 信頼モデル / PLAN D-007: ランク戦の公平性のため seed は常にサーバーが生成する。
+    # クライアント送信 seed（後方互換のため受け付けはするが無視する）は使わない。
+    _SEED_BITS = 31
+
+    def generate_battle_seed(self) -> int:
+        return secrets.randbits(self._SEED_BITS)
+
     def run_ranked_battle(
         self,
         player_a: UserRow,
@@ -277,13 +285,13 @@ class GameStore:
         opponent_tactics: dict[Position, TacticSet] | None,
         opponent_user: UserRow | None,
         opponent_team_row: TeamRow | None,
-        seed: int,
     ):
         player_team, player_tactics = self.load_team_for_battle(team_a)
         if opponent_team is None or opponent_tactics is None:
             opponent_team, opponent_tactics = build_demo_cpu_team()
             opponent_team = Team(id="cpu", name="CPU", slots=opponent_team.slots)
 
+        seed = self.generate_battle_seed()
         battle = self.run_battle(player_team, player_tactics, opponent_team, opponent_tactics, seed)
         self.db.save_battle(
             battle.id,

@@ -139,6 +139,37 @@ def test_async_pvp_match_and_ranked_battle():
     assert len(ranking) >= 2
 
 
+def test_ranked_battle_ignores_client_seed_and_generates_server_seed():
+    user = _register("SeedTester")
+    team = _build_team_assets(user["token"])
+
+    battle = client.post(
+        "/battles/ranked",
+        json={"team_id": team["id"], "seed": 42},
+        headers=_headers(user["token"]),
+    ).json()
+
+    # docs/09 信頼モデル / PLAN D-007: クライアント送信 seed は無視され、サーバーが生成する。
+    assert battle["seed"] != 42
+    assert isinstance(battle["seed"], int)
+
+    stored = client.get(f"/battles/{battle['id']}", headers=_headers(user["token"])).json()
+    assert stored["seed"] == battle["seed"]
+
+
+def test_ranked_battle_without_seed_field_still_succeeds():
+    user = _register("SeedOmitted")
+    team = _build_team_assets(user["token"])
+
+    response = client.post(
+        "/battles/ranked",
+        json={"team_id": team["id"]},
+        headers=_headers(user["token"]),
+    )
+    assert response.status_code == 200
+    assert isinstance(response.json()["seed"], int)
+
+
 def test_team_update_roundtrip():
     user = _register("Editor")
     team = _build_team_assets(user["token"])
