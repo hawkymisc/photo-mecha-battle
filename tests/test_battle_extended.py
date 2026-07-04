@@ -83,6 +83,31 @@ def test_defend_evade_and_charge_actions_are_logged():
     assert any("ENを" in entry.format() for entry in charge_result.log_entries)
 
 
+def test_turret_preset_defends_when_hp_at_or_below_30_percent():
+    """PLAN D-002: 砲台型は（迎撃条件が不成立の場合）自分HPが30%以下で防御が発動する。
+
+    旧実装では「自分HPが70%以下→通常砲撃」が防御スロットより前段にあり、
+    HP30%以下の状況でも常に70%以下条件が先勝ちして防御に到達できなかった。
+    `engine.simulate()` は開始時に `clone_for_battle()` で HP/EN を満タンにリセットするため、
+    ここでは `_choose_action` を直接呼び、任意の HP 状態での条件評価だけを検証する。
+    """
+    engine = BattleEngine()
+    turret_mech = Mech(
+        "t", "Turret", MechForm.HUMAN, MechStats(100, 50, 60, 30, 40, 80), current_hp=30, current_en=50
+    )
+    team_a = _single_mech_team("a", turret_mech)
+    actor = _Actor(team=team_a, slot=team_a.slots[0], tactic=build_preset(TacticPreset.TURRET))
+
+    # BIRD 形態は TARGET_CLOSE_RANGE（迎撃条件）を満たさないため、防御スロットの到達性を検証できる。
+    enemy = Mech("e", "Enemy", MechForm.BIRD, MechStats(100, 40, 40, 60, 40, 80))
+    team_b = _single_mech_team("b", enemy, position=Position.BACK)
+    target = team_b.slots[0]
+
+    condition_label, action = engine._choose_action(actor, team_b, target, turn=1)
+    assert condition_label == "自分HPが30%以下"
+    assert action == ActionType.DEFEND
+
+
 def test_en_shortage_falls_back_when_fallback_is_unaffordable():
     engine = BattleEngine()
     mech = Mech("m", "M", MechForm.HUMAN, MechStats(100, 80, 40, 50, 50, 5), current_hp=100, current_en=5)
