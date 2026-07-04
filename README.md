@@ -107,9 +107,14 @@ Optional Workers（将来）
 撮影→メカ生成→編成→バトルのコアループをブラウザで確認するための開発用プロトタイプ。
 
 ```bash
-python -m uvicorn photo_mecha_battle.api.app:app --reload
+python -m uvicorn photo_mecha_battle.api.app:app --reload --host 0.0.0.0 --port 8000
 # ブラウザで http://127.0.0.1:8000/app/ を開く
 ```
+
+`--host 0.0.0.0` により同一サブネット内の他端末（スマートフォン等）からもアクセス可能になる。
+自機のLAN内IPアドレス（例: `192.168.1.10`）を確認し、他端末のブラウザで
+`http://<自機のIP>:8000/app/` を開けばよい（実機カメラでの撮影確認に利用できる）。
+ファイアウォールでポート8000への着信を許可する必要がある場合がある。
 
 ## 仕様書
 
