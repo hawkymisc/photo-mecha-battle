@@ -59,6 +59,19 @@ def require_admin(x_admin_token: Annotated[str | None, Header()] = None) -> None
         raise HTTPException(status_code=403, detail="admin token required")
 
 
+# PLAN D-005 / docs/06 Webhook: RevenueCat は Webhook に HMAC 署名を付与しないため、ダッシュボードで
+# 設定した共有シークレットを Authorization ヘッダーで検証する方式が公式サポートの認証手段。
+# 環境変数が未設定の場合（本番デフォルト）は常に拒否し、エンドポイントを事実上無効化する。
+# 実シークレットの発行・設定は外部作業（config/revenuecat_pending_setup.json 参照）。
+_REVENUECAT_WEBHOOK_SECRET_ENV_VAR = "PMB_REVENUECAT_WEBHOOK_SECRET"
+
+
+def require_revenuecat_webhook_auth(authorization: Annotated[str | None, Header()] = None) -> None:
+    configured = os.environ.get(_REVENUECAT_WEBHOOK_SECRET_ENV_VAR)
+    if not configured or authorization != configured:
+        raise HTTPException(status_code=401, detail="invalid webhook credentials")
+
+
 class RegisterRequest(BaseModel):
     name: str
 
@@ -565,10 +578,22 @@ def sync_billing(
 
 
 @app.post("/billing/revenuecat/webhook")
-def revenuecat_webhook(body: RevenueCatWebhookRequest, game_store: GameStore = Depends(get_store)):
+def revenuecat_webhook(
+    body: RevenueCatWebhookRequest,
+    game_store: GameStore = Depends(get_store),
+    _auth: None = Depends(require_revenuecat_webhook_auth),
+):
     event = body.event
     app_user_id = str(event.get("app_user_id", ""))
+    event_id = str(event.get("id", ""))
     event_type = str(event.get("type", ""))
+    # docs/06: entitlement_id は RevenueCat 公式ドキュメントで非推奨。entitlement_ids を優先し、
+    # 無い場合のみ後方互換で単数形から補う。
+    entitlement_ids = event.get("entitlement_ids")
+    if not entitlement_ids and event.get("entitlement_id"):
+        entitlement_ids = [event["entitlement_id"]]
     if not app_user_id:
         raise HTTPException(status_code=400, detail="missing app_user_id")
-    return game_store.apply_revenuecat_event(app_user_id, event_type)
+    if not event_id:
+        raise HTTPException(status_code=400, detail="missing event id")
+    return game_store.apply_revenuecat_event(event_id, app_user_id, event_type, list(entitlement_ids or []))

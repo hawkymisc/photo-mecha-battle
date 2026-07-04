@@ -1,0 +1,53 @@
+{
+  "_comment": "PLAN D-005 の外部（非コード）ブロッカーをここに切り出す。コード実装は完了しており、ここに書かれた項目はRevenueCatダッシュボード上の設定作業が完了し次第、環境変数の設定のみで本番反映できる。",
+  "plan_ref": "PLAN.md#D-005",
+  "status": "pending_external_setup",
+  "last_updated": "2026-07-04",
+  "summary": "Webhook の entitlement_ids ベース個別付与・event_id 冪等性チェック・Authorization ヘッダー認証はコード実装済み（src/photo_mecha_battle/api/app.py, game_store.py）。残るのはRevenueCatダッシュボード上の外部設定2件のみ。",
+  "implemented": [
+    "entitlement_ids に基づく個別 Entitlement 付与/失効（商品IDのハードコード対応表は廃止し、RevenueCatが解決した entitlement_ids をそのまま反映）",
+    "event.id を用いた冪等性チェック（同一イベント再送時の二重付与/二重失効を防止）",
+    "Authorization ヘッダーによる Webhook 認証（共有シークレット未設定時は常に401でエンドポイントを無効化）",
+    "イベント種別 x entitlement_ids のテストマトリクス（tests/test_revenuecat_webhook.py）"
+  ],
+  "blockers": [
+    {
+      "id": "product_entitlement_mapping",
+      "title": "RevenueCatダッシュボードでの商品(Product)定義とEntitlement紐付け",
+      "owner": "product/business (RevenueCatダッシュボード管理者)",
+      "status": "not_started",
+      "required_action": "App Store Connect / Google Play Console の商品をRevenueCat Productとして登録し、RevenueCatダッシュボード上で各Entitlementに紐付ける。紐付けが完了すると、購入イベントの entitlement_ids に自動的に反映されるため、サーバー側コードの変更は不要。",
+      "reference_docs": [
+        "docs/06_monetization_and_fairness.md#entitlement-定義-正と実装状態",
+        "docs/06_monetization_and_fairness.md#product--package-案"
+      ],
+      "draft_products": [
+        {
+          "name": "Monthly Premium",
+          "entitlements": ["premium_tactics", "extra_tactic_slots", "battle_log_summary", "generation_boost"]
+        },
+        {
+          "name": "Annual Premium",
+          "entitlements": ["premium_tactics", "extra_tactic_slots", "battle_log_summary", "generation_boost"]
+        },
+        {
+          "name": "Cosmetic Pack",
+          "entitlements": ["cosmetic_pack_access"]
+        },
+        {
+          "name": "One-time Support Pack",
+          "entitlements": []
+        }
+      ]
+    },
+    {
+      "id": "webhook_shared_secret",
+      "title": "Webhook 認証用の共有シークレット発行",
+      "owner": "product/business (RevenueCatダッシュボード管理者)",
+      "status": "not_started",
+      "required_action": "RevenueCatダッシュボードの Project settings > Webhooks で Authorization ヘッダー値（共有シークレット）を設定し、同じ値をサーバー環境変数に設定する。未設定の間は /billing/revenuecat/webhook は常に401を返し、安全側デフォルトとして事実上無効化される。",
+      "env_var": "PMB_REVENUECAT_WEBHOOK_SECRET",
+      "reference_code": "src/photo_mecha_battle/api/app.py:require_revenuecat_webhook_auth"
+    }
+  ]
+}
