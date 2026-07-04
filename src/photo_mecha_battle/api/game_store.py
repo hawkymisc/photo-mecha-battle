@@ -313,9 +313,17 @@ class GameStore:
 
         return battle
 
-    # docs/06 Product/Package案: Monthly/Annual Premium = 自然言語戦術生成 + 保存枠拡張 + ログ要約。
-    # いずれも利便性・表現機能であり、戦闘性能や戦術スロット数・使用可能条件/行動には影響しない。
-    _PREMIUM_BUNDLE_ENTITLEMENTS = ("premium_tactics", "extra_tactic_slots", "battle_log_summary")
+    # docs/06 Product/Package案: Monthly/Annual Premium = 自然言語戦術生成 + 保存枠拡張 +
+    # ログ要約 + 生成クォータ拡大。いずれも利便性・表現機能であり、戦闘性能や戦術スロット数・
+    # 使用可能条件/行動には影響しない（generation_boost は「試行回数」のみを増やす。docs/06 公平性の整理）。
+    # 商品↔Entitlement の個別対応が RevenueCat ダッシュボードで確定するまでは一括付与の簡易実装とする
+    # （PLAN D-005）。
+    _PREMIUM_BUNDLE_ENTITLEMENTS = (
+        "premium_tactics",
+        "extra_tactic_slots",
+        "battle_log_summary",
+        "generation_boost",
+    )
 
     # docs/06 Entitlement案の全量。docs/07 の POST /billing/sync はこの集合に限定して
     # クライアント CustomerInfo を反映する（未知キーは無視し、戦闘系の権限拡張を防ぐ）。
@@ -324,6 +332,7 @@ class GameStore:
         "extra_tactic_slots",
         "battle_log_summary",
         "cosmetic_pack_access",
+        "generation_boost",
     )
 
     def sync_client_entitlements(self, user_id: str, active_keys: list[str]) -> dict[str, object]:

@@ -1,7 +1,12 @@
 from fastapi.testclient import TestClient
 
 from photo_mecha_battle.api.app import app
-from photo_mecha_battle.api.limits import FREE_DAILY_CAPTURES, FREE_DAILY_MECHS
+from photo_mecha_battle.api.limits import (
+    FREE_DAILY_CAPTURES,
+    FREE_DAILY_MECHS,
+    PREMIUM_DAILY_CAPTURES,
+    PREMIUM_DAILY_MECHS,
+)
 from photo_mecha_battle.tactics import ActionType, ConditionKind, TacticPreset, build_preset
 
 client = TestClient(app)
@@ -333,3 +338,12 @@ def test_billing_sync_does_not_change_generation_quota():
     quotas = client.get("/users/quotas", headers=headers).json()
     assert quotas["captures"]["limit"] == FREE_DAILY_CAPTURES
     assert quotas["mechs"]["limit"] == FREE_DAILY_MECHS
+
+
+def test_billing_sync_with_generation_boost_increases_quota():
+    user = _register("SyncBoost")
+    headers = _headers(user["token"])
+    client.post("/billing/sync", json={"active_entitlements": ["generation_boost"]}, headers=headers)
+    quotas = client.get("/users/quotas", headers=headers).json()
+    assert quotas["captures"]["limit"] == PREMIUM_DAILY_CAPTURES
+    assert quotas["mechs"]["limit"] == PREMIUM_DAILY_MECHS
