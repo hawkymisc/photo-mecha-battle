@@ -11,11 +11,40 @@ from photo_mecha_battle.tactics import (
 )
 
 
-def test_all_presets_have_four_slots_and_fallback():
+def test_all_presets_have_at_most_four_slots_and_fallback():
     for preset in TacticPreset:
         tactic = build_preset(preset)
-        assert len(tactic.slots) == 4
+        assert 1 <= len(tactic.slots) <= 4
         assert isinstance(tactic.fallback_action, ActionType)
+
+
+def test_non_turret_presets_keep_four_slots():
+    """PLAN D-002 の砲台型修正が他プリセットに影響しないことを確認する。"""
+    for preset in TacticPreset:
+        if preset is TacticPreset.TURRET:
+            continue
+        assert len(build_preset(preset).slots) == 4
+
+
+def test_turret_preset_has_three_slots_per_docs_04():
+    """docs/04 砲台型: 迎撃・防御・重砲撃の3スロット + 基本行動（通常砲撃）。"""
+    tactic = build_preset(TacticPreset.TURRET)
+    assert len(tactic.slots) == 3
+    assert tactic.fallback_action == ActionType.NORMAL_SHELL
+
+
+def test_turret_preset_defend_slot_is_reachable():
+    """PLAN D-002: 自分HPが30%以下で防御スロットが shadowing されずに評価順に到達すること。"""
+    tactic = build_preset(TacticPreset.TURRET)
+    conditions = [slot.condition for slot in tactic.slots]
+    defend_index = next(
+        i for i, slot in enumerate(tactic.slots) if slot.action == ActionType.DEFEND
+    )
+    # 防御スロットより前段に、HP30%以下を包含してしまう広い自己HP条件がないこと
+    # （= 70%以下のような shadowing 条件が復活していないことを保証する）。
+    for earlier in conditions[:defend_index]:
+        if earlier.kind == ConditionKind.SELF_HP_BELOW:
+            assert earlier.threshold <= 30
 
 
 def test_tactic_set_rejects_more_than_four_slots():

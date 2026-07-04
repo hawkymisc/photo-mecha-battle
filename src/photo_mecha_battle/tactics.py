@@ -203,11 +203,13 @@ def _bombardment_preset() -> TacticSet:
 
 
 def _turret_preset() -> TacticSet:
+    # docs/04 砲台型: 「自分HPが70%以下→通常砲撃」を防御より前段に置くと、防御条件（30%以下）が
+    # 先勝ち評価で常に到達不能になる shadowing バグがあった（PLAN D-002）。通常砲撃は基本行動で
+    # 表現済みのため、当該スロットは削除し docs/04 の3スロット構成に合わせる。
     return TacticSet.from_slots(
         PRESET_LABELS[TacticPreset.TURRET],
         [
             TacticSlot(Condition(ConditionKind.TARGET_CLOSE_RANGE, None), ActionType.INTERCEPT),
-            TacticSlot(Condition(ConditionKind.SELF_HP_BELOW, 70), ActionType.NORMAL_SHELL),
             TacticSlot(Condition(ConditionKind.SELF_HP_BELOW, 30), ActionType.DEFEND),
             TacticSlot(Condition(ConditionKind.SELF_EN_AT_LEAST, 80), ActionType.HEAVY_ARTILLERY),
         ],
