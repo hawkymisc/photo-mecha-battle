@@ -11,6 +11,10 @@ from photo_mecha_battle.tactics import TacticPreset, build_preset
 C0_MIN = 90.0
 C1_MIN = 80.0
 
+# PLAN D-004: POST /billing/entitlements はこのトークンを X-Admin-Token で送った
+# リクエストのみ許可する（テスト環境専用の固定シークレット）。
+ADMIN_TOKEN = "test-admin-secret"
+
 
 @pytest.fixture(autouse=True)
 def fresh_game_store(monkeypatch, tmp_path):
@@ -19,6 +23,7 @@ def fresh_game_store(monkeypatch, tmp_path):
     db = Database(":memory:")
     game_store = GameStore(db, data_dir=tmp_path / "media")
     monkeypatch.setattr(app_module, "store", game_store)
+    monkeypatch.setenv("PMB_ADMIN_TOKEN", ADMIN_TOKEN)
     yield game_store
     db.close()
 

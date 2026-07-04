@@ -186,5 +186,8 @@ Premium は作戦作成とメカ生成を便利にする機能です。
 ハッカソンデモ用に、Entitlement を直接切り替える API（`POST /billing/entitlements`）を用意している
 （[`docs/08`](08_mvp_and_roadmap.md) の「Entitlement 強制付与できる管理者フラグ」に対応）。
 
-- **現状は認証ユーザーが自分自身の Entitlement を自由に変更できる**。デモ・開発環境限定の挙動である。
-- 本番公開前に、管理者権限チェックまたはエンドポイント無効化を必須とする（PLAN の修正タスク参照）。
+- **実装済み（PLAN D-004）**: 呼び出しには `X-Admin-Token` ヘッダが必須（[`api/app.py`](../src/photo_mecha_battle/api/app.py) の `require_admin`）。
+  環境変数 `PMB_ADMIN_TOKEN` が未設定の場合（本番デフォルト）は常に `403` を返し、エンドポイントを事実上無効化する。
+  デモ環境でのみ `PMB_ADMIN_TOKEN` を設定し、一致するトークンを持つ呼び出しのみ許可する。
+- 対象ユーザーは呼び出しに使う `X-User-Token` の所有者（自分自身）のみ。管理者トークンと対象ユーザー自身の
+  トークンの両方が必要なため、一般ユーザー単独では自分の Entitlement を変更できない。
