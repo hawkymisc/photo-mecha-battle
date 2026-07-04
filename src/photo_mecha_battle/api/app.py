@@ -46,6 +46,19 @@ def require_user(
     return user
 
 
+# docs/06 デモ用 Entitlement 付与 API の扱い / PLAN D-004: 本番公開前に管理者権限チェックまたは
+# エンドポイント無効化を必須とする。PMB_ADMIN_TOKEN が未設定の環境（=本番デフォルト）では
+# 常に拒否し、事実上エンドポイントを無効化する。設定されたデモ環境でのみ、一致する
+# X-Admin-Token を持つ呼び出しを許可する。
+_ADMIN_TOKEN_ENV_VAR = "PMB_ADMIN_TOKEN"
+
+
+def require_admin(x_admin_token: Annotated[str | None, Header()] = None) -> None:
+    configured = os.environ.get(_ADMIN_TOKEN_ENV_VAR)
+    if not configured or x_admin_token != configured:
+        raise HTTPException(status_code=403, detail="admin token required")
+
+
 class RegisterRequest(BaseModel):
     name: str
 
@@ -530,9 +543,11 @@ def update_entitlement(
     body: EntitlementUpdateRequest,
     user: UserRow = Depends(require_user),
     game_store: GameStore = Depends(get_store),
+    _admin: None = Depends(require_admin),
 ):
     # docs/08 ハッカソン対応: デモ用にEntitlementを強制付与できる管理者フラグ。
-    # ただし docs/06 で定義された既知のEntitlementキーのみ許可し、任意の権限を
+    # PLAN D-004: 呼び出しには X-Admin-Token（require_admin）が必須。
+    # さらに docs/06 で定義された既知のEntitlementキーのみ許可し、任意の権限を
     # 作り出せないようにする（戦闘力・戦術スロット数には影響しない領域に限定）。
     if body.entitlement_key not in GameStore.KNOWN_ENTITLEMENT_KEYS:
         raise HTTPException(status_code=400, detail=f"unknown entitlement_key: {body.entitlement_key}")

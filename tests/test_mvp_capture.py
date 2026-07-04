@@ -13,6 +13,9 @@ from photo_mecha_battle.api.limits import (
 
 client = TestClient(app)
 
+# conftest.py の fresh_game_store フィクスチャが PMB_ADMIN_TOKEN にこの値を設定する。
+ADMIN_TOKEN = "test-admin-secret"
+
 
 def _image_bytes() -> bytes:
     image = Image.new("RGB", (256, 256), (230, 230, 230))
@@ -139,7 +142,7 @@ def test_non_quota_entitlements_do_not_change_capture_quota(auth_headers):
     client.post(
         "/billing/entitlements",
         json={"entitlement_key": "premium_tactics", "is_active": True},
-        headers=headers,
+        headers={**headers, "X-Admin-Token": ADMIN_TOKEN},
     )
     quotas = client.get("/users/quotas", headers=headers).json()
     assert quotas["captures"]["limit"] == FREE_DAILY_CAPTURES
@@ -152,7 +155,7 @@ def test_generation_boost_entitlement_increases_capture_quota(auth_headers):
     client.post(
         "/billing/entitlements",
         json={"entitlement_key": "generation_boost", "is_active": True},
-        headers=headers,
+        headers={**headers, "X-Admin-Token": ADMIN_TOKEN},
     )
     quotas = client.get("/users/quotas", headers=headers).json()
     assert quotas["captures"]["limit"] == PREMIUM_DAILY_CAPTURES

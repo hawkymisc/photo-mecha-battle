@@ -11,6 +11,9 @@ from photo_mecha_battle.tactics import ActionType, ConditionKind, TacticPreset, 
 
 client = TestClient(app)
 
+# conftest.py の fresh_game_store フィクスチャが PMB_ADMIN_TOKEN にこの値を設定する。
+ADMIN_TOKEN = "test-admin-secret"
+
 
 def _register(name: str) -> dict:
     return client.post("/auth/register", json={"name": name}).json()
@@ -18,6 +21,14 @@ def _register(name: str) -> dict:
 
 def _headers(token: str) -> dict[str, str]:
     return {"X-User-Token": token}
+
+
+def _admin_headers(token: str) -> dict[str, str]:
+    return {"X-User-Token": token, "X-Admin-Token": ADMIN_TOKEN}
+
+
+def _admin_headers(token: str) -> dict[str, str]:
+    return {"X-User-Token": token, "X-Admin-Token": ADMIN_TOKEN}
 
 
 def _build_team_assets(token: str, label: str = "umbrella"):
@@ -392,7 +403,7 @@ def test_billing_entitlement_stub():
     updated = client.post(
         "/billing/entitlements",
         json={"entitlement_key": "premium_tactics", "is_active": True},
-        headers=_headers(user["token"]),
+        headers=_admin_headers(user["token"]),
     ).json()
     assert any(item["key"] == "premium_tactics" and item["is_active"] for item in updated["entitlements"])
 
@@ -402,9 +413,42 @@ def test_billing_entitlement_rejects_unknown_key():
     response = client.post(
         "/billing/entitlements",
         json={"entitlement_key": "unlimited_damage", "is_active": True},
-        headers=_headers(user["token"]),
+        headers=_admin_headers(user["token"]),
     )
     assert response.status_code == 400
+
+
+def test_billing_entitlement_requires_admin_token():
+    """PLAN D-004: 一般ユーザーが自分の Entitlement を管理者トークン無しで変更できない。"""
+    user = _register("SelfServe")
+    response = client.post(
+        "/billing/entitlements",
+        json={"entitlement_key": "premium_tactics", "is_active": True},
+        headers=_headers(user["token"]),
+    )
+    assert response.status_code == 403
+
+
+def test_billing_entitlement_rejects_wrong_admin_token():
+    user = _register("Impersonator")
+    response = client.post(
+        "/billing/entitlements",
+        json={"entitlement_key": "premium_tactics", "is_active": True},
+        headers={"X-User-Token": user["token"], "X-Admin-Token": "not-the-real-secret"},
+    )
+    assert response.status_code == 403
+
+
+def test_billing_entitlement_disabled_when_admin_token_not_configured(monkeypatch):
+    """PLAN D-004: PMB_ADMIN_TOKEN 未設定（本番デフォルト）ではエンドポイントを事実上無効化する。"""
+    user = _register("ProdLike")
+    monkeypatch.delenv("PMB_ADMIN_TOKEN", raising=False)
+    response = client.post(
+        "/billing/entitlements",
+        json={"entitlement_key": "premium_tactics", "is_active": True},
+        headers=_admin_headers(user["token"]),
+    )
+    assert response.status_code == 403
 
 
 def test_get_billing_entitlements_endpoint():
@@ -412,7 +456,7 @@ def test_get_billing_entitlements_endpoint():
     client.post(
         "/billing/entitlements",
         json={"entitlement_key": "cosmetic_pack_access", "is_active": True},
-        headers=_headers(user["token"]),
+        headers=_admin_headers(user["token"]),
     )
     listed = client.get("/billing/entitlements", headers=_headers(user["token"])).json()
     assert any(
