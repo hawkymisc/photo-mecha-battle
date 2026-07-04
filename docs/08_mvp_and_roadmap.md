@@ -191,6 +191,11 @@ i2i生成はサーバーコストが高くなる可能性がある。
 
 ## 未決事項
 
+> 以下の未決事項は [`config/po_pending_decisions.json`](../config/po_pending_decisions.json) に構造化データとして
+> 一元管理する（PO 決定待ちの追跡用）。決定後は本ファイルと当該JSONの両方を更新する。
+> RevenueCat のダッシュボード外部設定（商品定義・Webhook共有シークレット）は
+> [`config/revenuecat_pending_setup.json`](../config/revenuecat_pending_setup.json) を参照。
+
 ### バトル関連
 
 - 支援型・妨害型プリセットの導入時期

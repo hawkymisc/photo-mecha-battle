@@ -1,0 +1,172 @@
+{
+  "_comment": "PO（プロダクトオーナー）による意思決定待ちの項目を一元管理する。実装可能な項目はPLAN.mdで追跡し、こちらには『コードでは解決できず、意思決定/外部設定が必要』な項目のみを置く。決定後はstatusをdecidedにし、decisionフィールドに結論を記入した上でPLAN.md / docsへ還流すること。",
+  "last_updated": "2026-07-04",
+  "how_to_use": "各itemのstatusが'decided'になったら、referenced_docsに記載のドキュメントとPLAN.mdへ結論を反映し、対応する実装タスクを起票する。",
+  "categories": [
+    {
+      "category": "revenuecat_external_setup",
+      "label": "RevenueCat 外部設定（コード対応不可・リリースブロッカー）",
+      "detail_file": "config/revenuecat_pending_setup.json",
+      "note": "商品定義・Entitlement紐付け・Webhook共有シークレットの発行はRevenueCatダッシュボード上の作業であり、詳細は上記ファイルに切り出し済み。"
+    },
+    {
+      "category": "battle",
+      "label": "バトル関連",
+      "items": [
+        {
+          "id": "support_disruptor_preset_timing",
+          "question": "支援型・妨害型プリセットの導入時期はいつにするか（現状5プリセット: 近接/ヒットアンドアウェイ/狙撃/爆撃/砲台）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/04_tactics.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "disrupt_status_effect_design",
+          "question": "妨害（disrupt）の能力低下効果の仕様。状態異常システム（対象ステータス、効果量、持続ターン数、重複/スタック可否、解除条件）をどう設計するか",
+          "status": "pending",
+          "decision": null,
+          "blocks": ["PLAN.md#D-006"],
+          "interim_behavior": "設計確定までは disrupt は決定的な低威力攻撃（威力0.4、能力低下なし）のまま。tests/test_battle_extended.py::test_disrupt_stays_a_deterministic_low_power_attack_pending_status_effect_design で回帰固定済み。",
+          "referenced_docs": ["docs/04_tactics.md", "docs/05_team_and_battle.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "rating_elo_migration",
+          "question": "レーティングをElo式に移行するか（現状は固定デルタ方式 +25/-15 等）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/05_team_and_battle.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "draw_handling_improvement",
+          "question": "引き分け時のレーティング扱いをどう改善するか（現状は変動なし）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/05_team_and_battle.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+        }
+      ]
+    },
+    {
+      "category": "image_generation",
+      "label": "画像生成関連",
+      "items": [
+        {
+          "id": "generation_model_choice",
+          "question": "高品質i2i導入時に採用する生成モデルはどれにするか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/03_mech_generation_and_stats.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "generation_resolution",
+          "question": "生成解像度をいくつにするか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/03_mech_generation_and_stats.md"]
+        },
+        {
+          "id": "generation_cost_per_unit",
+          "question": "1体あたりの生成コスト（インフラ費用・クォータ設計への影響）をどう見積もるか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/03_mech_generation_and_stats.md", "docs/06_monetization_and_fairness.md"]
+        },
+        {
+          "id": "regeneration_count_policy",
+          "question": "同一メカの再生成回数をどう扱うか（無制限/上限あり/課金対象）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/03_mech_generation_and_stats.md"]
+        },
+        {
+          "id": "appearance_rarity_relationship",
+          "question": "見た目とレアリティの関係をどう設計するか（レアリティシステム自体が将来拡張）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/03_mech_generation_and_stats.md"]
+        }
+      ]
+    },
+    {
+      "category": "tactics_generation",
+      "label": "戦術生成関連（自然言語→戦術DSL、Phase 3）",
+      "items": [
+        {
+          "id": "local_llm_adoption",
+          "question": "ローカルLLMを採用するか（クラウド推論との比較）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "supported_device_range",
+          "question": "ローカル推論の対応端末範囲をどこまでとするか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "model_size",
+          "question": "採用するモデルサイズはどの程度か",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "conversion_accuracy_criteria",
+          "question": "自然言語→戦術DSL変換の精度評価基準をどう定めるか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "cloud_inference_rate_limit",
+          "question": "クラウド推論を使う場合の回数制限をどう設計するか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/06_monetization_and_fairness.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+        }
+      ]
+    },
+    {
+      "category": "billing",
+      "label": "課金関連",
+      "items": [
+        {
+          "id": "subscription_vs_onetime",
+          "question": "月額制と買い切りのどちらを主軸にするか（併用の場合の位置付けも含む）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/06_monetization_and_fairness.md#product--package-案", "docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "extra_tactic_slots_count",
+          "question": "`extra_tactic_slots` Entitlementが解放する戦術保存枠の具体的な枠数はいくつにするか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/06_monetization_and_fairness.md"]
+        },
+        {
+          "id": "regeneration_billing",
+          "question": "生成画像の再生成に課金を発生させるか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/06_monetization_and_fairness.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+        },
+        {
+          "id": "ranked_vs_casual_billing_diff",
+          "question": "ランク戦とカジュアル戦で課金要素に差分を設けるか（設ける場合、公平性原則との整合をどう取るか）",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/06_monetization_and_fairness.md"]
+        },
+        {
+          "id": "ad_model",
+          "question": "広告モデルを導入するか",
+          "status": "pending",
+          "decision": null,
+          "referenced_docs": ["docs/08_mvp_and_roadmap.md#未決事項"]
+        }
+      ]
+    }
+  ]
+}
