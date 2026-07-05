@@ -4,7 +4,7 @@
 
 ## 仕様の唯一の情報源
 
-- ゲーム仕様は [`docs/00`](docs/00_root_overview.md)〜[`09`](docs/09_lightweight_server_architecture.md) が正本（一覧は [docs/00 の仕様書構成](docs/00_root_overview.md#仕様書構成)）。実装前に該当ドキュメントを読み、矛盾があればコードより先に仕様を直す。
+- ゲーム仕様は [`docs/00`](docs/00_root_overview.md)〜[`09`](docs/09_lightweight_server_architecture.md) が正本（一覧は [docs/00 の仕様書構成](docs/00_root_overview.md#仕様書構成)）。Phase 0 技術調査は [`docs/10`](docs/10_mobile_image_generation_survey.md) を参照。実装前に該当ドキュメントを読み、矛盾があればコードより先に仕様を直す。
 - **システム分担・API の主経路**は [`docs/09_lightweight_server_architecture.md`](docs/09_lightweight_server_architecture.md) を正とする（旧 [`docs/07`](docs/07_platform_and_system.md) のサーバー集中型構成は 2026-07-02 に廃止・統合済み。[`docs/07`](docs/07_platform_and_system.md) は認証・データモデル・API 共通規約を担当）。
 - [`docs/08_mvp_and_roadmap.md`](docs/08_mvp_and_roadmap.md) の「MVP では実装しないもの」はスコープ外。着手するにはユーザー明示の GO が必要。
 - 設計判断を変えたら、同一セッション内で `docs/` 内の関連キーワードを grep し、上位の設計原則・下位の API 案の両方を整合させる（ハーネスの Document Consistency を `docs/` に適用）。

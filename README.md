@@ -13,11 +13,13 @@
 ## ゲームループ
 
 ```text
-写真撮影 → オブジェクト抽出 → 画像特徴量分析 → メカ生成
+写真撮影 → オブジェクト抽出 → 画像特徴量分析 → 型推定 → メカ生成
   → 戦術セット選択・編集 → チーム編成 → オートバトル → ログ確認・改善
 ```
 
 ## メカ型
+
+被写体の特徴量から **鳥形 / 人型 / 獣型が自動判明** する（プレイヤーは型を選ばない。`form_inference/1.0` — 詳細は [`docs/03_mech_generation_and_stats.md`](docs/03_mech_generation_and_stats.md)）。
 
 | 型 | 役割 | ステータス傾向 |
 |---|---|---|
@@ -132,6 +134,7 @@ python -m uvicorn photo_mecha_battle.api.app:app --reload --host 0.0.0.0 --port 
 | [07_platform_and_system.md](docs/07_platform_and_system.md) | プラットフォーム、認証、データモデル |
 | [08_mvp_and_roadmap.md](docs/08_mvp_and_roadmap.md) | MVP 範囲、ロードマップ、リスク |
 | [09_lightweight_server_architecture.md](docs/09_lightweight_server_architecture.md) | 軽量サーバー・クライアント厚めのシステム分担 |
+| [10_mobile_image_generation_survey.md](docs/10_mobile_image_generation_survey.md) | モバイル向け軽量画像生成 AI 調査（Phase 0） |
 
 ## 設計原則（抜粋）
 
