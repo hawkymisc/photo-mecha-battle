@@ -141,6 +141,50 @@ def test_post_mechs_ignores_client_form(auth_headers):
     assert mech["form"] == "bird"  # クライアント指定の beast は無視される
 
 
+def test_post_mechs_rejects_other_users_uploaded_object(auth_headers):
+    """他ユーザーがアップロードした写真由来の object ではメカを作れない（403）。
+
+    docs/07 所有権と同趣旨（D-008 のバトル参照権限と同型）。object_id を
+    知っているだけで他人の写真 crop から自分のメカ/アートを生成できてはならない。
+    """
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    owner_headers = {"X-User-Token": auth_headers["X-User-Token"]}
+    image = Image.new("RGB", (256, 256), (230, 230, 230))
+    ImageDraw.Draw(image).rectangle((80, 80, 180, 180), fill=(40, 40, 180))
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG")
+
+    upload = client.post(
+        "/captures/upload",
+        headers=owner_headers,
+        files={"file": ("owner.jpg", buffer.getvalue(), "image/jpeg")},
+    ).json()
+    detect = client.post(f"/captures/{upload['id']}/detect").json()
+    segment = client.post(
+        f"/captures/{upload['id']}/segment",
+        json={"label": "object", "bbox": detect["candidates"][0]["bbox"]},
+    ).json()
+
+    intruder = client.post("/auth/register", json={"name": "intruder"}).json()
+    response = client.post(
+        "/mechs",
+        headers={"X-User-Token": intruder["token"]},
+        json={"object_id": segment["id"], "name": "横取りメカ"},
+    )
+    assert response.status_code == 403, response.text
+
+    # 所有者本人は引き続き作成できる
+    owned = client.post(
+        "/mechs",
+        headers=owner_headers,
+        json={"object_id": segment["id"], "name": "本人メカ"},
+    )
+    assert owned.status_code == 200, owned.text
+
+
 def test_post_mechs_works_for_db_persisted_object_after_restart(fresh_game_store, auth_headers, monkeypatch):
     """プロセス再起動後（セッション objects が空）でも、DB 保存済み object からメカを作れる。
 

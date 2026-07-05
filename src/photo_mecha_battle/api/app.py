@@ -265,8 +265,15 @@ def analyze_object(object_id: str, game_store: GameStore = Depends(get_store)):
 
 @app.post("/mechs")
 def create_mech(body: MechCreateRequest, user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
-    if body.object_id not in game_store.objects and game_store.db.get_extracted_object(body.object_id) is None:
+    extracted = game_store.db.get_extracted_object(body.object_id)
+    if body.object_id not in game_store.objects and extracted is None:
         raise HTTPException(status_code=404, detail="object not found")
+    # docs/07 所有権（D-008 と同型）: アップロード写真由来の object は所有者のみ使用可。
+    # デモ経路（POST /captures、DB に capture が無い）は所有者を持たないため対象外。
+    if extracted is not None:
+        capture = game_store.db.get_capture(str(extracted["capture_id"]))
+        if capture is not None and capture["user_id"] != user.id:
+            raise HTTPException(status_code=403, detail="object belongs to another user")
     try:
         return game_store.create_mech_for_user(user.id, body.object_id, body.name)
     except QuotaExceededError as exc:
