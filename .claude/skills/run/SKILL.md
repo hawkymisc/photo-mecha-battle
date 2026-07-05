@@ -32,7 +32,7 @@ python -m uvicorn photo_mecha_battle.api.app:app --reload --port 8000
 
 Web クライアント上で: 写真アップロード → 検出・抽出 → メカ生成 → 戦術選択 → チーム編成（3体）→ CPU 戦バトル → ログ確認 → ランキング。
 
-API を直接叩く場合はこの依存順で: `POST /auth/register`（`X-User-Token` を取得）→ `POST /captures/upload`（multipart）→ `POST /mechs` → `POST /tactics` → `POST /teams` → `POST /battles` → `GET /battles/{id}`。
+API を直接叩く場合はこの依存順で: `POST /auth/register`（`X-User-Token` を取得）→ `POST /captures/upload`（multipart）→ `POST /captures/{id}/detect` → `POST /captures/{id}/segment`（`object_id` を取得）→ `POST /mechs` → `POST /tactics` → `POST /teams` → `POST /battles` → `GET /battles/{id}`。
 
 - API の疎通確認は curl ではなく Python（`httpx` / `requests`）スクリプトで行う（ユーザーグローバルの api-testing ルール）。
 - サーバー不要の CLI デモ: `python scripts/vertical_slice.py`（撮影→バトルの縦切り）、`python scripts/demo_battle.py`（バトルのみ）、`python scripts/mvp_flow.py`。
