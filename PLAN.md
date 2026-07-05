@@ -8,7 +8,7 @@
 | 🔲 | P0-002 | SD 1.5 + mecha LoRA 試作（Phase 0a） | kohya_ss、鳥型 50 ペア |
 | 🔲 | P0-003 | 端末ベンチ（Local Dream / Core ML） | RAM・速度・発熱（Phase 0b） |
 | 🔲 | P0-004 | DreamLite PoC（NC 限定） | 品質上限確認（Phase 0c） |
-| 🔲 | P0-005 | `scripts/diag/diag_mech_i2i.sh` | seed 固定再現性（Phase 0d） |
+| ✅ | P0-005 | `scripts/diag/diag_mech_i2i.sh` | seed 固定再現性（Phase 0d） |
 
 ## Phase 1 — Vertical Slice Prototype
 
