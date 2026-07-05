@@ -141,8 +141,10 @@ form = argmax(bird_score, beast_score, human_score)
 | クライアント | 型選択 UI は持たない。分析後に「判明した型」を表示し、見た目プレビューのみ提供 |
 | テスト | 代表例（傘・石・ペン想定）＋同点・境界値を `form_inference/1.0` で固定 |
 
-> **既知の実装乖離**: PoC Web（[`web/index.html`](../web/index.html)）と現行 `POST /mechs` は
-> クライアントから `form` を受け取る暫定実装のまま。本節が正であり、実装タスクは PLAN D-013 参照。
+> **実装状態（PLAN D-013 対応済み）**: `infer_form(features)`（[`mech_stats.py`](../src/photo_mecha_battle/mech_stats.py)）が
+> 本節のスコア式・タイブレークを実装。`POST /mechs` はクライアント `form` を無視してサーバー推定で確定し、
+> 応答に `form_inference_version` を含める。PoC Web（[`web/index.html`](../web/index.html)）は型選択 UI を持たず、
+> 生成後に判明した型を表示する。代表例・同点・境界値は [`tests/test_form_inference.py`](../tests/test_form_inference.py) で固定。
 
 ### 将来拡張（`form_inference/2.0` 以降）
 

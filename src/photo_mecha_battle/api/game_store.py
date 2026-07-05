@@ -15,6 +15,8 @@ from photo_mecha_battle.api.limits import limits_for_user
 from photo_mecha_battle.api.store import InMemoryStore, CaptureRecord, ObjectRecord, build_demo_cpu_team
 from photo_mecha_battle.battle import BattleEngine, BattleResult
 from photo_mecha_battle.battle_log_serde import battle_log_to_payload
+from photo_mecha_battle.features import FeatureVector
+from photo_mecha_battle.mech_stats import FORM_INFERENCE_VERSION
 from photo_mecha_battle.models import Mech, MechForm, MechStats, Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticSet
 from photo_mecha_battle.tactics_serde import tactic_set_from_payload, tactic_set_to_payload
@@ -88,8 +90,30 @@ class GameStore:
             return record
         return self._session.segment_object(capture_id, label)
 
-    def create_mech(self, object_id: str, form: MechForm, name: str):
-        return self._session.create_mech(object_id, form, name)
+    def create_mech(self, object_id: str, name: str):
+        self._restore_session_object(object_id)
+        return self._session.create_mech(object_id, name)
+
+    def _restore_session_object(self, object_id: str) -> None:
+        """DB 保存済みの抽出オブジェクトをセッションへ復元する。
+
+        プロセス再起動後はセッション objects が空になるが、`POST /mechs` の
+        存在チェックは DB 側 extracted_objects も許可するため、features_json
+        から FeatureVector を復元して型推定・生成を成立させる
+        （session に既にあれば何もしない）。
+        """
+        if object_id in self._session.objects:
+            return
+        extracted = self.db.get_extracted_object(object_id)
+        if extracted is None:
+            return  # 呼び出し元の KeyError に委ねる（API 層は事前に 404 を返す）
+        features = FeatureVector(**extracted["features"])
+        self._session.objects[object_id] = ObjectRecord(
+            id=object_id,
+            capture_id=str(extracted["capture_id"]),
+            features=features,
+            info_score=float(extracted["info_score"]),
+        )
 
     def run_battle(self, team_a, tactics_a, team_b, tactics_b, seed: int):
         return self._session.run_battle(team_a, tactics_a, team_b, tactics_b, seed)
@@ -116,10 +140,10 @@ class GameStore:
             },
         }
 
-    def create_mech_for_user(self, user_id: str, object_id: str, form: MechForm, name: str) -> dict[str, object]:
+    def create_mech_for_user(self, user_id: str, object_id: str, name: str) -> dict[str, object]:
         self._ensure_mech_quota(user_id)
-        record = self.create_mech(object_id, form, name)
-        art_url = self._render_and_store_art(record.id, object_id, form)
+        record = self.create_mech(object_id, name)
+        art_url = self._render_and_store_art(record.id, object_id, record.mech.form)
         self.db.save_mech(
             user_id,
             record.id,
@@ -422,6 +446,7 @@ class GameStore:
             "object_id": object_id,
             "name": mech.name,
             "form": mech.form.value,
+            "form_inference_version": FORM_INFERENCE_VERSION,
             "stats": mech.stats.__dict__,
         }
 

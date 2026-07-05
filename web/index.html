@@ -62,11 +62,8 @@
       </div>
       <div class="field">
         <label>メカ型</label>
-        <div class="radio-group" id="form-group">
-          <label class="radio-chip active"><input type="radio" name="mech-form" value="bird" checked />鳥形（速さ）</label>
-          <label class="radio-chip"><input type="radio" name="mech-form" value="human" />人型（バランス）</label>
-          <label class="radio-chip"><input type="radio" name="mech-form" value="beast" />獣形（装甲）</label>
-        </div>
+        <!-- PLAN D-013: 型はプレイヤー選択ではなく、写真の特徴量からサーバーが自動推定する -->
+        <p class="field-note" id="form-note">写真の分析結果から自動判定されます（鳥形・人型・獣形）。生成後に判明した型が表示されます。</p>
       </div>
     </div>
 
