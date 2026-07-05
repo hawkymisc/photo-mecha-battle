@@ -322,6 +322,9 @@ Entitlement は戦術スロット数・条件・行動を増やさない（[`doc
 
 i2i は戦闘性能に影響しない。サーバー常時GPUは必須ではない。
 
+オンデバイス i2i のモデル候補・LoRA 方針・端末 tier・Phase 0 検証計画は
+[`docs/10`](10_mobile_image_generation_survey.md) を参照。
+
 ## セキュリティ・不正対策
 
 サーバーで必ず行うもの（[`docs/02`](02_photo_object_extraction.md) を満たす最小セット）:

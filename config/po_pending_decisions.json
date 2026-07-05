@@ -67,7 +67,12 @@
           "question": "高品質i2i導入時に採用する生成モデルはどれにするか",
           "status": "pending",
           "decision": null,
-          "referenced_docs": ["docs/03_mech_generation_and_stats.md", "docs/08_mvp_and_roadmap.md#未決事項"]
+          "interim_findings": "2026-07-05 調査完了（docs/10）。Phase 0 第一候補: SD 1.5 + LoRA + img2img（両 OS・商用可・RAM ~2GB）。PoC 品質上限: DreamLite 0.39B（i2i 最適だが重み NC）。5 条件（両 OS・低 RAM・LoRA 学習・i2i・商用）を同時満たす単一モデルは現時点で存在しない。",
+          "referenced_docs": [
+            "docs/03_mech_generation_and_stats.md",
+            "docs/08_mvp_and_roadmap.md#未決事項",
+            "docs/10_mobile_image_generation_survey.md"
+          ]
         },
         {
           "id": "generation_resolution",

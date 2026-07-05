@@ -58,6 +58,7 @@
 | [07_platform_and_system.md](07_platform_and_system.md) | iOS/Android、認証、データモデル、API 共通規約（構成・API 一覧は 09 が正） |
 | [08_mvp_and_roadmap.md](08_mvp_and_roadmap.md) | MVP範囲、開発フェーズ、未決事項、リスク |
 | [09_lightweight_server_architecture.md](09_lightweight_server_architecture.md) | 軽量サーバー・クライアント厚めのシステム分担（本書が API 分担の正） |
+| [10_mobile_image_generation_survey.md](10_mobile_image_generation_survey.md) | モバイル向け軽量画像生成 AI 調査（Phase 0 i2i・LoRA 検証計画） |
 
 ## 重要設計原則
 

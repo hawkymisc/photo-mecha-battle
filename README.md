@@ -134,6 +134,7 @@ python -m uvicorn photo_mecha_battle.api.app:app --reload --host 0.0.0.0 --port 
 | [07_platform_and_system.md](docs/07_platform_and_system.md) | プラットフォーム、認証、データモデル |
 | [08_mvp_and_roadmap.md](docs/08_mvp_and_roadmap.md) | MVP 範囲、ロードマップ、リスク |
 | [09_lightweight_server_architecture.md](docs/09_lightweight_server_architecture.md) | 軽量サーバー・クライアント厚めのシステム分担 |
+| [10_mobile_image_generation_survey.md](docs/10_mobile_image_generation_survey.md) | モバイル向け軽量画像生成 AI 調査（Phase 0） |
 
 ## 設計原則（抜粋）
 

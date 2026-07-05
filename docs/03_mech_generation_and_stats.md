@@ -265,6 +265,9 @@ ATK −= penalty ÷ 2（切り捨て）
 MVP ではクロップ画像への簡易スタイライズ（型別のティントとシルエット合成）とし、
 高品質 i2i 生成は将来の非同期ワーカーで行う（[`docs/09`](09_lightweight_server_architecture.md)）。
 
+高品質 i2i 導入時のモデル候補・LoRA 方針・Phase 0 検証計画は
+[`docs/10`](10_mobile_image_generation_survey.md) を参照（採用モデルは PO 決定待ち）。
+
 ## 重要原則
 
 生成画像は見た目を表す。
