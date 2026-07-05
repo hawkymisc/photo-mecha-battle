@@ -29,6 +29,13 @@ TYPE_ADVANTAGE = {
 ADVANTAGE_MULTIPLIER = 1.15
 DISADVANTAGE_MULTIPLIER = 0.90
 
+# PLAN D-010: ダメージ素点のスケーリング係数 K（docs/05 ダメージ式）。
+# 分母の +100 はソフトアーマー正規化定数（基本装甲 100 ではない）。
+# K が無いと現実的なステータス帯で素点が常に 1.0 未満となり、
+# max(1, ...) により全打撃が 1 ダメージへ潰れて決着不能になる（Issue #23）。
+# キャリブレーション: ATK=80, DEF=50 → 80×60/150 = 32 ダメージ（docs/05 ログ例と整合）。
+DAMAGE_SCALING = 60
+
 POSITION_ATTACK_MODIFIER = {
     Position.FRONT: 1.0,
     Position.MIDDLE: 0.95,
@@ -383,7 +390,7 @@ class BattleEngine:
         if profile.get("execute") and self._hp_ratio(defender) > 0.25:
             skill_power *= 0.85
 
-        base = attacker.stats.atk * skill_power / (defender.stats.defense + 100)
+        base = attacker.stats.atk * skill_power * DAMAGE_SCALING / (defender.stats.defense + 100)
         type_mod = self._type_modifier(attacker.form, defender.form)
         position_mod = POSITION_ATTACK_MODIFIER[actor.slot.position] / POSITION_DEFENSE_MODIFIER[target_slot.position]
 
