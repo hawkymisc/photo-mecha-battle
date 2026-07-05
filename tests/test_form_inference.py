@@ -139,3 +139,49 @@ def test_post_mechs_ignores_client_form(auth_headers):
     """クライアントが form を送っても 400 にせず、サーバー推定で上書きする。"""
     mech = _create_mech_via_api(auth_headers, "umbrella", {"form": "beast"})
     assert mech["form"] == "bird"  # クライアント指定の beast は無視される
+
+
+def test_post_mechs_works_for_db_persisted_object_after_restart(fresh_game_store, auth_headers, monkeypatch):
+    """プロセス再起動後（セッション objects が空）でも、DB 保存済み object からメカを作れる。
+
+    `POST /mechs` の存在チェックは DB 側の extracted_objects も許可するため、
+    推定・生成も DB の features_json から FeatureVector を復元して動く必要がある。
+    """
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    from photo_mecha_battle.api import app as app_module
+    from photo_mecha_battle.api.game_store import GameStore
+
+    headers = {"X-User-Token": auth_headers["X-User-Token"]}
+    image = Image.new("RGB", (256, 256), (230, 230, 230))
+    ImageDraw.Draw(image).rectangle((80, 80, 180, 180), fill=(180, 40, 40))
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG")
+
+    upload = client.post(
+        "/captures/upload",
+        headers=headers,
+        files={"file": ("restart.jpg", buffer.getvalue(), "image/jpeg")},
+    ).json()
+    detect = client.post(f"/captures/{upload['id']}/detect").json()
+    segment = client.post(
+        f"/captures/{upload['id']}/segment",
+        json={"label": "object", "bbox": detect["candidates"][0]["bbox"]},
+    ).json()
+
+    # 再起動をシミュレート: 同じ DB を共有する新しい GameStore（セッション objects は空）
+    restarted = GameStore(fresh_game_store.db, data_dir=fresh_game_store.image_storage.root)
+    monkeypatch.setattr(app_module, "store", restarted)
+    assert segment["id"] not in restarted.objects
+
+    response = client.post(
+        "/mechs",
+        headers=headers,
+        json={"object_id": segment["id"], "name": "再起動後メカ"},
+    )
+    assert response.status_code == 200, response.text
+    mech = response.json()
+    assert mech["form"] in ("bird", "human", "beast")
+    assert mech["form_inference_version"] == "form_inference/1.0"
