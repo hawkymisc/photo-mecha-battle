@@ -94,8 +94,10 @@ class SegmentRequest(BaseModel):
 
 class MechCreateRequest(BaseModel):
     object_id: str
-    form: MechForm
     name: str
+    # PLAN D-013: 型はサーバー推定で確定する（docs/03 form_inference/1.0）。
+    # 後方互換のため form を受理はするが、値は無視して常にサーバー推定で上書きする。
+    form: MechForm | None = None
 
 
 class TacticSlotRequest(BaseModel):
@@ -266,7 +268,7 @@ def create_mech(body: MechCreateRequest, user: UserRow = Depends(require_user), 
     if body.object_id not in game_store.objects and game_store.db.get_extracted_object(body.object_id) is None:
         raise HTTPException(status_code=404, detail="object not found")
     try:
-        return game_store.create_mech_for_user(user.id, body.object_id, body.form, body.name)
+        return game_store.create_mech_for_user(user.id, body.object_id, body.name)
     except QuotaExceededError as exc:
         raise HTTPException(status_code=429, detail=f"{exc.resource} quota exceeded") from exc
 

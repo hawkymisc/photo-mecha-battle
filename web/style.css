@@ -246,30 +246,13 @@ textarea {
   width: 100%;
 }
 
-.radio-group {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.radio-chip {
-  border: 1px solid var(--line);
-  padding: 8px 14px;
-  font-size: 13px;
+.field-note {
+  border: 1px dashed var(--line);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
   color: var(--ink-dim);
-  position: relative;
-  cursor: pointer;
-}
-
-.radio-chip input {
-  position: absolute;
-  opacity: 0;
-}
-
-.radio-chip.active {
-  border-color: var(--cyan);
-  color: var(--cyan);
-  box-shadow: 0 0 12px rgba(53, 231, 255, 0.25) inset;
+  margin: 0;
 }
 
 .dropzone {

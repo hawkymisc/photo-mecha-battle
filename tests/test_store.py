@@ -26,5 +26,7 @@ def test_create_mech_persists_in_store():
     store = InMemoryStore()
     capture = store.create_capture()
     obj = store.segment_object(capture.id, "stone")
-    record = store.create_mech(obj.id, MechForm.BEAST, "Test")
+    record = store.create_mech(obj.id, "Test")
     assert store.mechs[record.id].mech.name == "Test"
+    # PLAN D-013: 型は特徴量から自動推定される（石 → 獣型、docs/03 代表例）
+    assert store.mechs[record.id].mech.form == MechForm.BEAST

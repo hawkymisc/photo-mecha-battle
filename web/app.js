@@ -217,13 +217,6 @@ function bindCaptureForm() {
     buildBtn.disabled = false;
   });
 
-  document.querySelectorAll('input[name="mech-form"]').forEach((radio) => {
-    radio.addEventListener("change", () => {
-      document.querySelectorAll("#form-group .radio-chip").forEach((chip) => chip.classList.remove("active"));
-      radio.closest(".radio-chip").classList.add("active");
-    });
-  });
-
   buildBtn.addEventListener("click", handleBuildMech);
 }
 
@@ -231,7 +224,6 @@ async function handleBuildMech() {
   const buildBtn = document.getElementById("build-mech-btn");
   const file = state.pendingCapture && state.pendingCapture.file;
   const name = document.getElementById("mech-name").value.trim();
-  const form = document.querySelector('input[name="mech-form"]:checked').value;
 
   if (!file) {
     toast("先に写真を選択してください", "error");
@@ -262,12 +254,16 @@ async function handleBuildMech() {
     });
 
     buildBtn.innerHTML = '<span class="spinner"></span>メカを生成中…';
+    // PLAN D-013: form は送らない。型はサーバーが特徴量から自動推定する（docs/03）。
     const mech = await api("/mechs", {
       method: "POST",
-      json: { object_id: segment.id, form, name },
+      json: { object_id: segment.id, name },
     });
 
-    toast(`「${mech.name}」が完成しました（情報量スコア ${segment.info_score.toFixed(2)}）`, "success");
+    toast(
+      `「${mech.name}」が完成しました — 判明した型: ${FORM_LABELS[mech.form] || mech.form}（情報量スコア ${segment.info_score.toFixed(2)}）`,
+      "success"
+    );
     resetCaptureForm();
     await refreshMechs();
     refreshQuota();

@@ -15,6 +15,7 @@ from photo_mecha_battle.api.limits import limits_for_user
 from photo_mecha_battle.api.store import InMemoryStore, CaptureRecord, ObjectRecord, build_demo_cpu_team
 from photo_mecha_battle.battle import BattleEngine, BattleResult
 from photo_mecha_battle.battle_log_serde import battle_log_to_payload
+from photo_mecha_battle.mech_stats import FORM_INFERENCE_VERSION
 from photo_mecha_battle.models import Mech, MechForm, MechStats, Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticSet
 from photo_mecha_battle.tactics_serde import tactic_set_from_payload, tactic_set_to_payload
@@ -88,8 +89,8 @@ class GameStore:
             return record
         return self._session.segment_object(capture_id, label)
 
-    def create_mech(self, object_id: str, form: MechForm, name: str):
-        return self._session.create_mech(object_id, form, name)
+    def create_mech(self, object_id: str, name: str):
+        return self._session.create_mech(object_id, name)
 
     def run_battle(self, team_a, tactics_a, team_b, tactics_b, seed: int):
         return self._session.run_battle(team_a, tactics_a, team_b, tactics_b, seed)
@@ -116,10 +117,10 @@ class GameStore:
             },
         }
 
-    def create_mech_for_user(self, user_id: str, object_id: str, form: MechForm, name: str) -> dict[str, object]:
+    def create_mech_for_user(self, user_id: str, object_id: str, name: str) -> dict[str, object]:
         self._ensure_mech_quota(user_id)
-        record = self.create_mech(object_id, form, name)
-        art_url = self._render_and_store_art(record.id, object_id, form)
+        record = self.create_mech(object_id, name)
+        art_url = self._render_and_store_art(record.id, object_id, record.mech.form)
         self.db.save_mech(
             user_id,
             record.id,
@@ -422,6 +423,7 @@ class GameStore:
             "object_id": object_id,
             "name": mech.name,
             "form": mech.form.value,
+            "form_inference_version": FORM_INFERENCE_VERSION,
             "stats": mech.stats.__dict__,
         }
 

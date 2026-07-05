@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from photo_mecha_battle.battle import BattleEngine, BattleResult
 from photo_mecha_battle.features import FeatureVector
-from photo_mecha_battle.mech_stats import build_mech, compute_info_score
+from photo_mecha_battle.mech_stats import build_mech, compute_info_score, infer_form
 from photo_mecha_battle.models import Mech, MechForm, Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticPreset, TacticSet, build_preset
 
@@ -72,10 +72,12 @@ class InMemoryStore:
         self.objects[record.id] = record
         return record
 
-    def create_mech(self, object_id: str, form: MechForm, name: str) -> MechRecord:
+    def create_mech(self, object_id: str, name: str) -> MechRecord:
+        # PLAN D-013: 型はクライアント選択ではなく特徴量からサーバーが決定的に推定する
+        # （docs/03 form_inference/1.0、docs/09 信頼モデル）。
         obj = self.objects[object_id]
         mech_id = str(uuid.uuid4())
-        mech = build_mech(mech_id, name, form, obj.features)
+        mech = build_mech(mech_id, name, infer_form(obj.features), obj.features)
         record = MechRecord(id=mech_id, object_id=object_id, mech=mech)
         self.mechs[mech_id] = record
         return record
@@ -122,6 +124,20 @@ def _features_for_label(label: str) -> FeatureVector:
             elongation=0.2,
             roundness=0.85,
             symmetry=0.5,
+        ),
+        # docs/03 代表例「ペン（想定）」: 高 symmetry + edge_complexity → human
+        "pen": FeatureVector(
+            visual_entropy=0.6,
+            edge_complexity=0.65,
+            color_diversity=0.45,
+            shape_complexity=0.6,
+            semantic_rarity=0.2,
+            capture_quality=0.9,
+            size_balance=0.7,
+            area=0.4,
+            elongation=0.45,
+            roundness=0.55,
+            symmetry=0.75,
         ),
     }
     return presets.get(label, presets["umbrella"])

@@ -22,6 +22,53 @@ FORM_BASE_STATS: dict[MechForm, MechStats] = {
 STAT_MIN = 10
 STAT_MAX = 200
 
+# PLAN D-013: メカ型の自動推定（docs/03 型推定ルール）。
+# 同一 FeatureVector に対し常に同一の form を返す（決定的）。
+# 特徴量の algo_version とは独立にバージョン管理する。
+FORM_INFERENCE_VERSION = "form_inference/1.0"
+
+# 同点タイブレークの機械的順序（差が _TIE_EPSILON 未満なら同点扱い）。
+# ゲームデザイン上の優先意味は持たせない（docs/03）。
+_FORM_TIEBREAK_ORDER = (MechForm.HUMAN, MechForm.BIRD, MechForm.BEAST)
+_TIE_EPSILON = 1e-9
+
+
+def form_scores(features: FeatureVector) -> dict[MechForm, float]:
+    """docs/03 のスコア式（0.0〜1.0 の加重和）。"""
+    return {
+        MechForm.BIRD: (
+            0.50 * features.elongation
+            + 0.30 * (1 - features.roundness)
+            # 画面内サイズが中程度（軽快さの proxy）
+            + 0.20 * (1 - abs(features.area - 0.35))
+        ),
+        MechForm.BEAST: (
+            0.45 * features.roundness
+            + 0.35 * features.area
+            + 0.20 * (1 - features.elongation)
+        ),
+        MechForm.HUMAN: (
+            0.35 * features.symmetry
+            + 0.30 * features.edge_complexity
+            # 細長さと丸さが拮抗＝バランス型シルエット
+            + 0.20 * (1 - abs(features.elongation - features.roundness))
+            + 0.15 * features.shape_complexity
+        ),
+    }
+
+
+def _resolve_form(scores: dict[MechForm, float]) -> MechForm:
+    best = max(scores.values())
+    for form in _FORM_TIEBREAK_ORDER:
+        if best - scores[form] < _TIE_EPSILON:
+            return form
+    raise AssertionError("unreachable: argmax must match one of the forms")
+
+
+def infer_form(features: FeatureVector) -> MechForm:
+    """FeatureVector からメカ型を決定的に推定する（form_inference/1.0）。"""
+    return _resolve_form(form_scores(features))
+
 
 def compute_info_score(features: FeatureVector) -> float:
     return (

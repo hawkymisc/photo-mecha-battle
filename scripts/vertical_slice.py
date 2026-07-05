@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from photo_mecha_battle.api.store import InMemoryStore, build_demo_cpu_team
-from photo_mecha_battle.models import MechForm, Position, Team, TeamSlot
+from photo_mecha_battle.models import Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticPreset, build_preset
 
 
@@ -13,20 +13,23 @@ def main() -> None:
 
     print("=== Photo Mecha Battle — Vertical Slice ===\n")
 
-    capture = store.create_capture("umbrella")
-    print(f"[1] 撮影完了 capture_id={capture.id}")
+    # PLAN D-013: 型はプレイヤー選択ではなく特徴量からの自動推定（docs/03 form_inference/1.0）。
+    # 被写体ごとに異なる型が判明する流れをデモする（石→獣型、ペン→人型、傘→鳥形）。
+    labels_and_names = [
+        ("stone", "石メカ・前衛"),
+        ("pen", "ペンメカ・中衛"),
+        ("umbrella", "傘メカ・後衛"),
+    ]
+    records = []
+    for index, (label, name) in enumerate(labels_and_names, start=1):
+        capture = store.create_capture(label)
+        candidates = store.detect_objects(capture.id)
+        obj = store.segment_object(capture.id, str(candidates[0]["label"]))
+        records.append(store.create_mech(obj.id, name))
+        print(f"[{index}] 撮影→検出→セグメント label={label} info_score={obj.info_score:.3f}")
 
-    candidates = store.detect_objects(capture.id)
-    label = str(candidates[0]["label"])
-    print(f"[2] オブジェクト検出 label={label} confidence={candidates[0]['confidence']}")
-
-    obj = store.segment_object(capture.id, label)
-    print(f"[3] セグメント完了 object_id={obj.id} info_score={obj.info_score:.3f}")
-
-    mech_front = store.create_mech(obj.id, MechForm.BIRD, "傘メカ・前衛")
-    mech_middle = store.create_mech(obj.id, MechForm.HUMAN, "傘メカ・中衛")
-    mech_back = store.create_mech(obj.id, MechForm.BEAST, "傘メカ・後衛")
-    print("[4] メカ生成完了")
+    mech_front, mech_middle, mech_back = records
+    print("[4] メカ生成完了（型は特徴量から自動推定）")
     for record in (mech_front, mech_middle, mech_back):
         stats = record.mech.stats
         print(
