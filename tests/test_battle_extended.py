@@ -280,18 +280,22 @@ def test_skips_dead_actor_and_ends_at_max_turns():
 def test_crit_damage_with_high_luck():
     engine = BattleEngine()
     lucky = Mech("lucky", "Lucky", MechForm.HUMAN, MechStats(100, 100, 10, 50, 50, 100, luck=500), current_hp=100, current_en=100)
+    no_luck = Mech("nl", "NoLuck", MechForm.HUMAN, MechStats(100, 100, 10, 50, 50, 100, luck=0), current_hp=100, current_en=100)
     target = Mech("t", "T", MechForm.BEAST, MechStats(100, 10, 10, 10, 50, 50), current_hp=100, current_en=100)
-    actor = _Actor(team=_single_mech_team("a", lucky), slot=TeamSlot(mech=lucky, position=Position.FRONT), tactic=_custom_tactic([]))
     profile = ACTION_PROFILES[ActionType.NORMAL_ATTACK]
 
+    # random() を 0.0 に固定: uniform(0.9, 1.1) は両者とも 0.9 になり、
+    # クリティカル判定は luck=500 で成立・luck=0 で不成立となる（差分はクリティカル倍率のみ）。
     with patch.object(random.Random, "random", return_value=0.0):
+        crit_actor = _Actor(team=_single_mech_team("a", lucky), slot=TeamSlot(mech=lucky, position=Position.FRONT), tactic=_custom_tactic([]))
         crit_damage = engine._calculate_damage(
-            actor, TeamSlot(mech=target, position=Position.FRONT), ActionType.NORMAL_ATTACK, profile, random.Random(0)
+            crit_actor, TeamSlot(mech=target, position=Position.FRONT), ActionType.NORMAL_ATTACK, profile, random.Random(0)
         )
-    normal_damage = engine._calculate_damage(
-        actor, TeamSlot(mech=target, position=Position.FRONT), ActionType.NORMAL_ATTACK, profile, random.Random(4)
-    )
-    assert crit_damage >= normal_damage
+        normal_actor = _Actor(team=_single_mech_team("a", no_luck), slot=TeamSlot(mech=no_luck, position=Position.FRONT), tactic=_custom_tactic([]))
+        normal_damage = engine._calculate_damage(
+            normal_actor, TeamSlot(mech=target, position=Position.FRONT), ActionType.NORMAL_ATTACK, profile, random.Random(0)
+        )
+    assert crit_damage > normal_damage
 
 
 def test_intercept_bonus_against_frontline():
