@@ -14,7 +14,7 @@
 - 1オブジェクト選択
 - セグメンテーション
 - 情報量・特徴量計算
-- 鳥形 / 人型 / 獣型の選択
+- 特徴量からのメカ型自動推定（[`docs/03`](03_mech_generation_and_stats.md) 型推定ルール）
 - メカ画像生成
 - メカ保存
 - 初期戦術プリセット5種
@@ -72,6 +72,7 @@
 
 - 撮影
 - オブジェクト選択
+- 特徴量分析・型自動推定
 - メカ生成
 - 戦術プリセット選択
 - ダミーバトル
@@ -188,6 +189,7 @@ i2i生成はサーバーコストが高くなる可能性がある。
 | 生成回数制限 | 撮影 20/日・メカ 10/日（premium 50/30） | [`docs/06`](06_monetization_and_fairness.md) |
 | レーティング | 固定デルタ方式（+25/−15 等）、Elo 化は下記未決 | [`docs/05`](05_team_and_battle.md) |
 | MVP の見た目生成 | クロップへの簡易スタイライズ（i2i は将来ワーカー） | [`docs/03`](03_mech_generation_and_stats.md) / [`docs/09`](09_lightweight_server_architecture.md) |
+| メカ型の決定 | 特徴量から自動推定（`form_inference/1.0`、プレイヤー選択なし） | [`docs/03`](03_mech_generation_and_stats.md) 型推定ルール |
 
 ## 未決事項
 

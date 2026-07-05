@@ -125,7 +125,7 @@ FastAPI 標準の `{"detail": "..."}` 形式とする。
 | id | UUID |
 | user_id | 所有ユーザー |
 | object_id | 生成元 extracted_object |
-| form | `bird` / `human` / `beast` |
+| form | `bird` / `human` / `beast`。特徴量からサーバーが推定（`form_inference/1.0`。[`docs/03`](03_mech_generation_and_stats.md)）。クライアント入力不可 |
 | name | 機体名 |
 | stats_json | 確定ステータス（HP/ATK/DEF/SPD/TEC/EN/LUCK。算出は [`docs/03`](03_mech_generation_and_stats.md)） |
 | art_url | 生成アート URL（見た目のみ。戦闘性能に影響しない） |

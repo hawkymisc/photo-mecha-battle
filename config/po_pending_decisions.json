@@ -1,6 +1,6 @@
 {
   "_comment": "PO（プロダクトオーナー）による意思決定待ちの項目を一元管理する。実装可能な項目はPLAN.mdで追跡し、こちらには『コードでは解決できず、意思決定/外部設定が必要』な項目のみを置く。決定後はstatusをdecidedにし、decisionフィールドに結論を記入した上でPLAN.md / docsへ還流すること。",
-  "last_updated": "2026-07-04",
+  "last_updated": "2026-07-05",
   "how_to_use": "各itemのstatusが'decided'になったら、referenced_docsに記載のドキュメントとPLAN.mdへ結論を反映し、対応する実装タスクを起票する。",
   "categories": [
     {
@@ -8,6 +8,19 @@
       "label": "RevenueCat 外部設定（コード対応不可・リリースブロッカー）",
       "detail_file": "config/revenuecat_pending_setup.json",
       "note": "商品定義・Entitlement紐付け・Webhook共有シークレットの発行はRevenueCatダッシュボード上の作業であり、詳細は上記ファイルに切り出し済み。"
+    },
+    {
+      "category": "mech_generation",
+      "label": "メカ生成関連",
+      "items": [
+        {
+          "id": "form_inference_policy",
+          "question": "メカ型（bird/human/beast）はプレイヤー選択か、特徴量からの自動推定か",
+          "status": "decided",
+          "decision": "特徴量から決定的に自動推定する（form_inference/1.0）。プレイヤー選択は行わない。PO 原案（バーコードバトラー／モンスターファーム型の制約→戦略構造）に合わせ、戦術・編成フェーズにプレイヤー判断を集中させる。",
+          "referenced_docs": ["docs/03_mech_generation_and_stats.md#型推定ルールform_inference10", "docs/01_game_concept_and_loop.md", "docs/09_lightweight_server_architecture.md"]
+        }
+      ]
     },
     {
       "category": "battle",
