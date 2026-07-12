@@ -30,7 +30,9 @@ import com.photomecha.core.api.ApiErrorKind
 import com.photomecha.core.api.ApiException
 import com.photomecha.core.api.MechDirectPayload
 import com.photomecha.core.features.FeatureExtractor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * S04 分析・命名（docs/11）。
@@ -129,7 +131,9 @@ fun AnalyzeScreen(
                             bbox = app.captureFlow.bbox,
                             features = analysis.features.asMap(),
                         )
-                        val response = app.apiClient.createMechDirect(payload, maskedCrop.toPngBytes())
+                        // PNG エンコードは重いので main thread から逃がす（ANR 防止）
+                        val pngBytes = withContext(Dispatchers.Default) { maskedCrop.toPngBytes() }
+                        val response = app.apiClient.createMechDirect(payload, pngBytes)
                         app.captureFlow.reset()
                         onCreated(response.id)
                     } catch (e: ApiException) {

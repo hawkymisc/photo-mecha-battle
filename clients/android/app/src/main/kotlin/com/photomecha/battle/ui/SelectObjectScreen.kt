@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,9 @@ import com.photomecha.core.features.FeatureExtractor
 import com.photomecha.core.image.Segmentation
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * S03 オブジェクト選択（docs/11 / docs/02）。
@@ -57,6 +61,8 @@ fun SelectObjectScreen(app: PmbApplication, onConfirmed: () -> Unit, onRetake: (
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var maskPreview by remember { mutableStateOf<Bitmap?>(null) }
     var emptyMaskWarning by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("被写体を囲んでください", style = MaterialTheme.typography.titleMedium)
@@ -126,21 +132,29 @@ fun SelectObjectScreen(app: PmbApplication, onConfirmed: () -> Unit, onRetake: (
                     onClick = {
                         val crop = cropBySelection(source, dragStart, dragEnd, viewSize) ?: return@Button
                         val (croppedBitmap, bbox) = crop
-                        val masked = Segmentation.maskByCornerDistance(croppedBitmap.toRgbaImage())
-                        val analysis = FeatureExtractor.analyze(masked)
-                        if (analysis.foregroundRatio <= 0.0) {
-                            emptyMaskWarning = true
-                            return@Button
+                        busy = true
+                        scope.launch {
+                            // 画像処理は重いので main thread から逃がす（ANR 防止）
+                            val analysis = withContext(Dispatchers.Default) {
+                                FeatureExtractor.analyze(
+                                    Segmentation.maskByCornerDistance(croppedBitmap.toRgbaImage()),
+                                )
+                            }
+                            busy = false
+                            if (analysis.foregroundRatio <= 0.0) {
+                                emptyMaskWarning = true
+                                return@launch
+                            }
+                            app.captureFlow.maskedCrop = analysis.canonical.toBitmap()
+                            app.captureFlow.analysis = analysis
+                            app.captureFlow.bbox = bbox
+                            maskPreview = app.captureFlow.maskedCrop
                         }
-                        app.captureFlow.maskedCrop = analysis.canonical.toBitmap()
-                        app.captureFlow.analysis = analysis
-                        app.captureFlow.bbox = bbox
-                        maskPreview = app.captureFlow.maskedCrop
                     },
-                    enabled = dragStart != null && dragEnd != null,
+                    enabled = dragStart != null && dragEnd != null && !busy,
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
                 ) {
-                    Text("マスク生成")
+                    Text(if (busy) "生成中…" else "マスク生成")
                 }
             } else {
                 Button(
