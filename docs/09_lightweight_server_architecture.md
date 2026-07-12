@@ -98,7 +98,7 @@
    a. perceptual hash による重複・使い回し検出
    b. 日次クォータ消費
    c. 特徴量の再計算（同一アルゴリズム・同バージョン）
-   d. クライアント値との差分が閾値超なら reject またはサーバー値で上書き
+   d. クライアント値との差分が閾値超なら reject（422 `feature_mismatch`。黙ってサーバー値で上書きしない）
    e. form 推定（`form_inference/1.0`）→ info_score → MechStats をサーバー式で確定
 3. 確定した form / stats / art_url（任意）を保存して返却
 ```
@@ -202,9 +202,13 @@ sequenceDiagram
 
 - `crop` 画像は multipart の別パート（フィールド名 `crop`、上記 JSON は `payload` フィールド）、
   または直前に取得した `object_id` 参照（JSON ボディの互換経路）。
-- crop は「アルファチャンネル = 確定マスク」の RGBA PNG。サーバーはアルファから
-  マスク・background_mix を導出して特徴量を再計算する（実装正本: `vision/analysis.py` の
-  `analyze_rgba_crop`）。
+- crop は「アルファチャンネル = 確定マスク」の RGBA PNG。サーバーは crop を正規形
+  （alpha < 128 の画素は RGB もゼロ化、マスクは二値化）へ変換してから phash・安全性判定・
+  特徴量再計算を行い、透明領域に残った不可視 RGB データの影響を排除する
+  （実装正本: `vision/analysis.py` の `canonicalize_rgba_crop` / `analyze_rgba_crop`）。
+- 検証で拒否された場合（409 / 422 / 429）はクォータを消費しない。
+- `bbox` は任意（省略時は全面 `[0,0,1,1]` として記録）。指定する場合は正規化座標 4 要素
+  `[x1, y1, x2, y2]`（`x1 < x2`, `y1 < y2`）でなければ 422。
 - `form` はリクエストに含めない（含まれてもサーバー推定で上書き）。応答に `form` と `form_inference_version` を返す。
 - サーバー応答の `stats` / `features` / `info_score` は**確定値**。クライアントプレビューと異なる場合がある。
 - エラー応答: 409（phash 重複）、422（`feature_mismatch` / `unsupported_algo_version` /

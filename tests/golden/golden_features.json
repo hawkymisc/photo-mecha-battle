@@ -27,18 +27,18 @@
       "background_mix": 0.5231250000000001,
       "features": {
         "visual_entropy": 0.14635915504535096,
-        "edge_complexity": 0.1408,
-        "color_diversity": 0.640625,
+        "edge_complexity": 0.1472,
+        "color_diversity": 0.61328125,
         "shape_complexity": 0.26655629139072845,
-        "semantic_rarity": 0.4906775,
-        "capture_quality": 0.33624795752,
+        "semantic_rarity": 0.47345687499999994,
+        "capture_quality": 0.337758354955,
         "size_balance": 0.26350000000000007,
         "area": 0.607775,
         "elongation": 0.3554083885209713,
         "roundness": 0.8222958057395143,
         "symmetry": 0.967948717948718
       },
-      "info_score": 0.296694528221947,
+      "info_score": 0.292301942965447,
       "form": "beast"
     },
     "symmetric": {

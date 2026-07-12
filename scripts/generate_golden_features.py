@@ -35,11 +35,15 @@ def _elongated_crop() -> Image.Image:
 
 
 def _round_crop() -> Image.Image:
-    """丸く画面占有の大きい被写体（beast 型に寄る想定の石・ボール類の proxy）。"""
+    """丸く画面占有の大きい被写体（beast 型に寄る想定の石・ボール類の proxy）。
+
+    docs/02 顔検出ヒューリスティックが肌色 RGB に反応するため、
+    フィクスチャの色は意図的に非肌色（青灰系）にしている。
+    """
     image = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    draw.ellipse((20, 30, 180, 180), fill=(110, 90, 70, 255))
-    draw.ellipse((60, 70, 100, 110), fill=(90, 70, 50, 255))
+    draw.ellipse((20, 30, 180, 180), fill=(80, 95, 115, 255))
+    draw.ellipse((60, 70, 100, 110), fill=(55, 70, 90, 255))
     return image
 
 

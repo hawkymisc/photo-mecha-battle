@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from photo_mecha_battle.api.database import Database, UserRow
 from photo_mecha_battle.api.game_store import FeatureMismatchError, GameStore, QuotaExceededError
@@ -112,6 +112,20 @@ class MechDirectCreateRequest(BaseModel):
     algo_version: str
     bbox: list[float] | None = None
     features: dict[str, float]
+
+    @field_validator("bbox")
+    @classmethod
+    def _validate_bbox(cls, value: list[float] | None) -> list[float] | None:
+        if value is None:
+            return value
+        if (
+            len(value) != 4
+            or not all(0.0 <= coord <= 1.0 for coord in value)
+            or value[0] >= value[2]
+            or value[1] >= value[3]
+        ):
+            raise ValueError("bbox must be [x1, y1, x2, y2] normalized to 0.0-1.0 with x1 < x2, y1 < y2")
+        return value
 
 
 class TacticSlotRequest(BaseModel):

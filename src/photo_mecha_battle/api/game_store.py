@@ -27,6 +27,7 @@ from photo_mecha_battle.models import Mech, MechForm, MechStats, Position, Team,
 from photo_mecha_battle.tactics import TacticSet
 from photo_mecha_battle.tactics_serde import tactic_set_from_payload, tactic_set_to_payload
 from photo_mecha_battle.vision.analysis import (
+    MASK_FOREGROUND_THRESHOLD,
     analyze_rgba_crop,
     assess_capture_safety,
     hamming_distance,
@@ -186,6 +187,21 @@ class GameStore:
 
     # docs/09 信頼モデル: クライアント申告 feature_vector とサーバー再計算値の許容差分 ε。
     DIRECT_FEATURE_TOLERANCE = 0.05
+    # docs/09 信頼モデル「最小解像度」: これ未満の crop は特徴量が不安定なため再撮影を促す。
+    MIN_CROP_DIMENSION = 64
+
+    @staticmethod
+    def _is_solid_color_foreground(canonical: Image.Image) -> bool:
+        """docs/09 信頼モデル「極端な単色画像の拒否」: 前景が実質 1 色なら True。
+
+        補間で中間色が混ざらないよう、リサイズせず正規形の画素を直接数える。
+        """
+        colors = {
+            (r, g, b)
+            for r, g, b, a in canonical.getdata()
+            if a >= MASK_FOREGROUND_THRESHOLD
+        }
+        return len(colors) <= 1
 
     def create_mech_direct(
         self,
@@ -212,19 +228,31 @@ class GameStore:
         except Exception as exc:
             raise ValueError(f"invalid_image:{exc}") from exc
 
-        phash = perceptual_hash(crop)
+        # 透明領域に残った不可視 RGB が phash・安全性判定・特徴量に影響しないよう、
+        # 以降はすべて正規形（背景ゼロ化済み crop）に対して行う（docs/09 信頼モデル）。
+        analysis = analyze_rgba_crop(crop)
+        canonical = analysis.canonical
+        mask = analysis.mask
+        background_mix = analysis.background_mix
+        server_features = analysis.features
+
+        # docs/09 信頼モデル「最小解像度、極端な単色画像の拒否」+ マスク空チェック。
+        # いずれも安全性ゲートと同じ「再撮影」導線のエラー種別で返す。
+        if min(canonical.width, canonical.height) < self.MIN_CROP_DIMENSION:
+            raise ValueError("unsafe_capture:crop_too_small")
+        if analysis.foreground_ratio <= 0.0:
+            raise ValueError("unsafe_capture:empty_mask")
+        if self._is_solid_color_foreground(canonical):
+            raise ValueError("unsafe_capture:solid_color_crop")
+
+        phash = perceptual_hash(canonical)
         for existing in self.db.list_capture_hashes(user_id):
             if hamming_distance(phash, existing) <= DUPLICATE_HASH_DISTANCE:
                 raise ValueError("duplicate_capture")
 
-        safety_status, safety_reason = assess_capture_safety(crop, phash)
+        safety_status, safety_reason = assess_capture_safety(canonical, phash)
         if safety_status == "blocked":
             raise ValueError(f"unsafe_capture:{safety_reason}")
-
-        analysis = analyze_rgba_crop(crop)
-        mask = analysis.mask
-        background_mix = analysis.background_mix
-        server_features = analysis.features
 
         for dimension, server_value in server_features.__dict__.items():
             client_value = getattr(client_features, dimension)
@@ -247,7 +275,8 @@ class GameStore:
         )
 
         object_id = str(uuid.uuid4())
-        crop_path = self.image_storage.save_crop(object_id, image_to_png_bytes(crop))
+        # 以降の art 生成・再検証は正規形 crop を正とする（不可視 RGB を持ち込まない）。
+        crop_path = self.image_storage.save_crop(object_id, image_to_png_bytes(canonical))
         mask_path = self.image_storage.save_mask(object_id, image_to_png_bytes(mask))
         mask_confidence = min(0.98, 0.5 + analysis.foreground_ratio)
         self.db.save_extracted_object(
@@ -263,7 +292,6 @@ class GameStore:
             quality_json={"background_mix": background_mix},
             safety_status=safety_status,
         )
-        self.db.increment_quota(user_id, "captures_used")
         self._session.objects[object_id] = ObjectRecord(
             id=object_id,
             capture_id=capture_id,
@@ -271,7 +299,10 @@ class GameStore:
             info_score=info_score,
         )
 
+        # capture クォータはメカ確定が成功してから消費する。途中失敗時に
+        # 「枠だけ消費してメカ未作成」となる不整合を避ける（レビュー指摘 M4）。
         response = self.create_mech_for_user(user_id, object_id, name)
+        self.db.increment_quota(user_id, "captures_used")
         # docs/09: サーバー確定値をクライアントに返す（クライアントプレビューと異なる場合がある）。
         response["features"] = server_features.__dict__
         response["info_score"] = info_score
