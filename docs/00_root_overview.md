@@ -59,6 +59,7 @@
 | [08_mvp_and_roadmap.md](08_mvp_and_roadmap.md) | MVP範囲、開発フェーズ、未決事項、リスク |
 | [09_lightweight_server_architecture.md](09_lightweight_server_architecture.md) | 軽量サーバー・クライアント厚めのシステム分担（本書が API 分担の正） |
 | [10_mobile_image_generation_survey.md](10_mobile_image_generation_survey.md) | モバイル向け軽量画像生成 AI 調査（Phase 0 i2i・LoRA 検証計画） |
+| [11_mobile_client_design.md](11_mobile_client_design.md) | iOS/Android クライアントの画面設計・共通アーキテクチャ（Phase 1 縦切り） |
 
 ## 重要設計原則
 
