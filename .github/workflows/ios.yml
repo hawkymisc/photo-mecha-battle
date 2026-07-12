@@ -1,0 +1,40 @@
+name: iOS CI
+
+on:
+  pull_request:
+    paths:
+      - "clients/ios/**"
+      - "tests/golden/**"
+      - ".github/workflows/ios.yml"
+  push:
+    branches: [develop, main]
+    paths:
+      - "clients/ios/**"
+      - "tests/golden/**"
+
+jobs:
+  core-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run PhotoMechaCore tests (golden fixtures + API client)
+        working-directory: clients/ios/PhotoMechaCore
+        run: swift test
+
+  app-build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: clients/ios
+        run: xcodegen generate
+      - name: Build for iOS Simulator
+        working-directory: clients/ios
+        run: |
+          xcodebuild -project PhotoMechaBattle.xcodeproj \
+            -scheme PhotoMechaBattle \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
