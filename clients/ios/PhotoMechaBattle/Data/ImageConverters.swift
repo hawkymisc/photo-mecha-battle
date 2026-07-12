@@ -4,8 +4,9 @@ import PhotoMechaCore
 /// UIImage ↔ RgbaImage の変換（Android BitmapConverters と同役割）。
 enum ImageConverters {
 
-    /// UIImage を非プリマルチプライドの RGBA ピクセル配列へ変換する。
-    /// 特徴量抽出（features/1.0）は生の RGB 値に依存するため premultiply しない。
+    /// UIImage を RGBA ピクセル配列へ変換する。
+    /// CGBitmapContext は非プリマルチプライドを扱えないため premultipliedLast で描画し、
+    /// 半透明画素のみ逆プリマルチプライする（撮影画像は全画素不透明なので通常は恒等）。
     static func toRgbaImage(_ image: UIImage) -> RgbaImage? {
         guard let cgImage = image.cgImage else { return nil }
         let width = cgImage.width
@@ -18,17 +19,21 @@ enum ImageConverters {
             bitsPerComponent: 8,
             bytesPerRow: width * 4,
             space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.last.rawValue
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
         var pixels = [UInt32](repeating: 0, count: width * height)
         for i in 0..<(width * height) {
-            pixels[i] = RgbaImage.pack(
-                a: Int(raw[i * 4 + 3]),
-                r: Int(raw[i * 4]),
-                g: Int(raw[i * 4 + 1]),
-                b: Int(raw[i * 4 + 2])
-            )
+            var r = Int(raw[i * 4])
+            var g = Int(raw[i * 4 + 1])
+            var b = Int(raw[i * 4 + 2])
+            let a = Int(raw[i * 4 + 3])
+            if a > 0, a < 255 {
+                r = min(255, (r * 255 + a / 2) / a)
+                g = min(255, (g * 255 + a / 2) / a)
+                b = min(255, (b * 255 + a / 2) / a)
+            }
+            pixels[i] = RgbaImage.pack(a: a, r: r, g: g, b: b)
         }
         return RgbaImage(width: width, height: height, pixels: pixels)
     }

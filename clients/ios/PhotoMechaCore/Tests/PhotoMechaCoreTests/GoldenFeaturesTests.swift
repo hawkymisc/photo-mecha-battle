@@ -57,35 +57,47 @@ final class GoldenFeaturesTests: XCTestCase {
     }
 
     #if canImport(CoreGraphics)
+    /// PNG を ImageIO でデコードし、CGImage の生バッファを直接読む。
+    /// CGBitmapContext は非プリマルチプライド RGBA を扱えないため描画は使わない。
+    /// フォーマットが想定外の場合はスキップではなく fail させる（merge ゲートの空洞化防止）。
     private func loadRgbaPng(_ url: URL) throws -> RgbaImage {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            throw XCTSkip("PNG decode unavailable: \(url.path)")
+            XCTFail("PNG decode failed: \(url.path)")
+            throw ApiError(kind: .invalid, statusCode: 0, reason: nil, message: "png decode")
         }
         let width = cgImage.width
         let height = cgImage.height
-        var raw = [UInt8](repeating: 0, count: width * height * 4)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        // 非プリマルチプライドの RGBA8888 で描画（特徴量は生の RGB 値に依存）
-        guard let context = CGContext(
-            data: &raw,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.last.rawValue
-        ) else {
-            throw XCTSkip("CGContext creation failed")
+        XCTAssertEqual(cgImage.bitsPerComponent, 8, "unexpected bit depth")
+        XCTAssertEqual(cgImage.bitsPerPixel, 32, "unexpected pixel size (expected RGBA8888)")
+        let alphaInfo = cgImage.alphaInfo
+        XCTAssertTrue(
+            alphaInfo == .last || alphaInfo == .premultipliedLast,
+            "unexpected alpha layout: \(alphaInfo.rawValue)"
+        )
+        guard let providerData = cgImage.dataProvider?.data as Data? else {
+            XCTFail("no pixel data for \(url.path)")
+            throw ApiError(kind: .invalid, statusCode: 0, reason: nil, message: "no pixel data")
         }
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let bytesPerRow = cgImage.bytesPerRow
         var pixels = [UInt32](repeating: 0, count: width * height)
-        for i in 0..<(width * height) {
-            let r = Int(raw[i * 4])
-            let g = Int(raw[i * 4 + 1])
-            let b = Int(raw[i * 4 + 2])
-            let a = Int(raw[i * 4 + 3])
-            pixels[i] = RgbaImage.pack(a: a, r: r, g: g, b: b)
+        providerData.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            for y in 0..<height {
+                for x in 0..<width {
+                    let offset = y * bytesPerRow + x * 4
+                    var r = Int(raw[offset])
+                    var g = Int(raw[offset + 1])
+                    var b = Int(raw[offset + 2])
+                    let a = Int(raw[offset + 3])
+                    if alphaInfo == .premultipliedLast, a > 0, a < 255 {
+                        // ゴールデン PNG のアルファは二値だが、念のため逆プリマルチプライ
+                        r = min(255, (r * 255 + a / 2) / a)
+                        g = min(255, (g * 255 + a / 2) / a)
+                        b = min(255, (b * 255 + a / 2) / a)
+                    }
+                    pixels[y * width + x] = RgbaImage.pack(a: a, r: r, g: g, b: b)
+                }
+            }
         }
         return RgbaImage(width: width, height: height, pixels: pixels)
     }
