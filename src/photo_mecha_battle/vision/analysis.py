@@ -95,6 +95,53 @@ def _shape_metrics(mask: Image.Image) -> tuple[float, float, float, float, float
     return area_ratio, elongation, roundness, symmetry, max(0.0, min(1.0, size_balance))
 
 
+# docs/09 クライアント厚め経路: crop は「アルファチャンネル = 確定マスク」の RGBA を正とする。
+# クライアント（iOS/Android）の features/1.0 移植はこの導出と同一でなければならない。
+MASK_FOREGROUND_THRESHOLD = 128
+
+
+@dataclass(frozen=True)
+class CropAnalysis:
+    features: FeatureVector
+    canonical: Image.Image
+    mask: Image.Image
+    background_mix: float
+    foreground_ratio: float
+
+
+def canonicalize_rgba_crop(crop: Image.Image) -> Image.Image:
+    """crop を正規形（背景 = 完全透明の黒、マスク = 二値アルファ）へ変換する。
+
+    docs/09 信頼モデル: 透明領域に残った元写真の RGB 値（不可視データ）が
+    特徴量・安全性判定・phash に影響しないよう、alpha < 閾値の画素は
+    RGB もアルファもゼロ化する。クライアント移植もこの正規化を前提とする。
+    """
+    rgba = crop if crop.mode == "RGBA" else crop.convert("RGBA")
+    binary_mask = rgba.getchannel("A").point(
+        lambda value: 255 if value >= MASK_FOREGROUND_THRESHOLD else 0
+    )
+    background = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
+    return Image.composite(rgba, background, binary_mask)
+
+
+def analyze_rgba_crop(crop: Image.Image) -> CropAnalysis:
+    """RGBA crop 単体から特徴量を導出する（docs/09 主経路のサーバー再計算・共有正本）。"""
+    canonical = canonicalize_rgba_crop(crop)
+    mask = canonical.getchannel("A")
+    foreground = sum(1 for value in mask.getdata() if value >= MASK_FOREGROUND_THRESHOLD)
+    total = max(1, canonical.width * canonical.height)
+    foreground_ratio = foreground / total
+    background_mix = max(0.0, min(1.0, 1.0 - foreground_ratio))
+    features = extract_features(canonical, mask, background_mix)
+    return CropAnalysis(
+        features=features,
+        canonical=canonical,
+        mask=mask,
+        background_mix=background_mix,
+        foreground_ratio=foreground_ratio,
+    )
+
+
 def extract_features(crop: Image.Image, mask: Image.Image, background_mix: float) -> FeatureVector:
     rgb = crop.convert("RGB")
     area_ratio, elongation, roundness, symmetry, size_balance = _shape_metrics(mask)
