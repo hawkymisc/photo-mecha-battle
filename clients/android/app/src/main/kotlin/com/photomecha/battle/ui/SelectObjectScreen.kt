@@ -134,21 +134,24 @@ fun SelectObjectScreen(app: PmbApplication, onConfirmed: () -> Unit, onRetake: (
                         val (croppedBitmap, bbox) = crop
                         busy = true
                         scope.launch {
-                            // 画像処理は重いので main thread から逃がす（ANR 防止）
-                            val analysis = withContext(Dispatchers.Default) {
-                                FeatureExtractor.analyze(
-                                    Segmentation.maskByCornerDistance(croppedBitmap.toRgbaImage()),
-                                )
+                            try {
+                                // 画像処理は重いので main thread から逃がす（ANR 防止）
+                                val analysis = withContext(Dispatchers.Default) {
+                                    FeatureExtractor.analyze(
+                                        Segmentation.maskByCornerDistance(croppedBitmap.toRgbaImage()),
+                                    )
+                                }
+                                if (analysis.foregroundRatio <= 0.0) {
+                                    emptyMaskWarning = true
+                                    return@launch
+                                }
+                                app.captureFlow.maskedCrop = analysis.canonical.toBitmap()
+                                app.captureFlow.analysis = analysis
+                                app.captureFlow.bbox = bbox
+                                maskPreview = app.captureFlow.maskedCrop
+                            } finally {
+                                busy = false
                             }
-                            busy = false
-                            if (analysis.foregroundRatio <= 0.0) {
-                                emptyMaskWarning = true
-                                return@launch
-                            }
-                            app.captureFlow.maskedCrop = analysis.canonical.toBitmap()
-                            app.captureFlow.analysis = analysis
-                            app.captureFlow.bbox = bbox
-                            maskPreview = app.captureFlow.maskedCrop
                         }
                     },
                     enabled = dragStart != null && dragEnd != null && !busy,

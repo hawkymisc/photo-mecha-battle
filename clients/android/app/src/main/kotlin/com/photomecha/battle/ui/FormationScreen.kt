@@ -51,9 +51,11 @@ fun FormationScreen(
     val selectedMech = remember { mutableStateMapOf<String, MechSummary>() }
     val selectedPreset = remember { mutableStateMapOf<String, TacticPreset>() }
     var busy by remember { mutableStateOf(false) }
+    var reloadKey by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
+        error = null
         try {
             mechs = app.apiClient.listMechs().mechs
             presets = app.apiClient.tacticPresets().presets
@@ -63,7 +65,7 @@ fun FormationScreen(
     }
 
     when {
-        error != null -> ErrorBox(error!!, onRetry = null)
+        error != null -> ErrorBox(error!!) { reloadKey++ }
         mechs == null || presets == null -> LoadingBox("編成データを取得中…")
         else -> Column(
             modifier = Modifier

@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.photomecha.battle.PmbApplication
+import com.photomecha.core.api.ApiErrorKind
 import com.photomecha.core.api.ApiException
 import com.photomecha.core.api.BattleDetailResponse
 import com.photomecha.core.api.BattleLogEntry
@@ -39,6 +40,7 @@ fun BattleScreen(
     battleId: String,
     onRematch: () -> Unit,
     onHome: () -> Unit,
+    onUnauthorized: () -> Unit,
 ) {
     var battle by remember { mutableStateOf<BattleDetailResponse?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -48,7 +50,7 @@ fun BattleScreen(
         try {
             battle = app.apiClient.battleDetail(battleId)
         } catch (e: ApiException) {
-            error = e.userMessage()
+            if (e.kind == ApiErrorKind.UNAUTHORIZED) onUnauthorized() else error = e.userMessage()
         }
     }
 

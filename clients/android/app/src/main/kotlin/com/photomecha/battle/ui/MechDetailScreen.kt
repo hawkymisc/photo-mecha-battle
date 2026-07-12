@@ -20,12 +20,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.photomecha.battle.PmbApplication
+import com.photomecha.core.api.ApiErrorKind
 import com.photomecha.core.api.ApiException
 import com.photomecha.core.api.MechResponse
 
 /** S05 メカ詳細（docs/11）。サーバー確定の型・ステータス・アートを表示する。 */
 @Composable
-fun MechDetailScreen(app: PmbApplication, mechId: String, onBack: () -> Unit) {
+fun MechDetailScreen(
+    app: PmbApplication,
+    mechId: String,
+    onBack: () -> Unit,
+    onUnauthorized: () -> Unit,
+) {
     var mech by remember { mutableStateOf<MechResponse?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -33,7 +39,7 @@ fun MechDetailScreen(app: PmbApplication, mechId: String, onBack: () -> Unit) {
         try {
             mech = app.apiClient.mechDetail(mechId)
         } catch (e: ApiException) {
-            error = e.userMessage()
+            if (e.kind == ApiErrorKind.UNAUTHORIZED) onUnauthorized() else error = e.userMessage()
         }
     }
 

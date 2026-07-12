@@ -5,11 +5,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="true" />
 
-    <!-- 開発用: LAN 上の uvicorn (http) へ接続するため。本番リリース時は HTTPS 化して外すこと -->
+    <!-- 平文 HTTP の許可は debug ビルドのみ（src/debug/AndroidManifest.xml）。release は HTTPS 専用 -->
     <application
         android:name=".PmbApplication"
         android:label="@string/app_name"
-        android:usesCleartextTraffic="true"
+        android:allowBackup="false"
         android:theme="@style/Theme.PhotoMechaBattle">
         <activity
             android:name=".MainActivity"

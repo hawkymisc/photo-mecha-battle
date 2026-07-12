@@ -96,6 +96,7 @@ fun PmbNavHost(app: PmbApplication, navController: NavHostController = rememberN
                 },
                 onRecapture = { navController.popBackStack(Routes.CAPTURE, inclusive = false) },
                 onReselect = { navController.popBackStack(Routes.SELECT, inclusive = false) },
+                onHome = { navController.popBackStack(Routes.HOME, inclusive = false) },
                 onUnauthorized = onUnauthorized,
             )
         }
@@ -104,6 +105,7 @@ fun PmbNavHost(app: PmbApplication, navController: NavHostController = rememberN
                 app = app,
                 mechId = entry.arguments?.getString("mechId").orEmpty(),
                 onBack = { navController.popBackStack(Routes.HOME, inclusive = false) },
+                onUnauthorized = onUnauthorized,
             )
         }
         composable(Routes.FORMATION) {
@@ -121,6 +123,7 @@ fun PmbNavHost(app: PmbApplication, navController: NavHostController = rememberN
                 battleId = entry.arguments?.getString("battleId").orEmpty(),
                 onRematch = { navController.popBackStack(Routes.FORMATION, inclusive = false) },
                 onHome = { navController.popBackStack(Routes.HOME, inclusive = false) },
+                onUnauthorized = onUnauthorized,
             )
         }
     }

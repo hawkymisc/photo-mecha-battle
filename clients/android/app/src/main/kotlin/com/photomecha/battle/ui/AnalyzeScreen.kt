@@ -45,6 +45,7 @@ fun AnalyzeScreen(
     onCreated: (String) -> Unit,
     onRecapture: () -> Unit,
     onReselect: () -> Unit,
+    onHome: () -> Unit,
     onUnauthorized: () -> Unit,
 ) {
     val analysis = app.captureFlow.analysis
@@ -114,6 +115,12 @@ fun AnalyzeScreen(
                         OutlinedButton(onClick = onRecapture, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                             Text("撮り直す")
                         }
+                    }
+                }
+                // docs/11: 429 は翌日回復の案内とともにホームへ戻す
+                ApiErrorKind.QUOTA_EXCEEDED -> {
+                    OutlinedButton(onClick = onHome, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                        Text("ホームへ戻る")
                     }
                 }
                 else -> Unit
