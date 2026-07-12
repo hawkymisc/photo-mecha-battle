@@ -13,7 +13,7 @@ final class GoldenFeaturesTests: XCTestCase {
         let algoVersion: String
         let formInferenceVersion: String
         let tolerance: Double
-        let cases: [GoldenCase]
+        let cases: [String: GoldenCase]
 
         enum CodingKeys: String, CodingKey {
             case algoVersion = "algo_version"
@@ -23,14 +23,13 @@ final class GoldenFeaturesTests: XCTestCase {
     }
 
     private struct GoldenCase: Decodable {
-        let name: String
-        let file: String
+        let image: String
         let backgroundMix: Double
         let infoScore: Double
         let features: [String: Double]
 
         enum CodingKeys: String, CodingKey {
-            case name, file, features
+            case image, features
             case backgroundMix = "background_mix"
             case infoScore = "info_score"
         }
@@ -95,20 +94,20 @@ final class GoldenFeaturesTests: XCTestCase {
         let manifest = try loadManifest()
         XCTAssertEqual(manifest.algoVersion, FeatureExtractor.algoVersion)
 
-        for golden in manifest.cases {
-            let pngURL = Self.goldenDirectory().appendingPathComponent(golden.file)
+        for (name, golden) in manifest.cases {
+            let pngURL = Self.goldenDirectory().appendingPathComponent(golden.image)
             let image = try loadRgbaPng(pngURL)
             let analysis = FeatureExtractor.analyze(image)
 
             XCTAssertEqual(
                 analysis.backgroundMix, golden.backgroundMix,
                 accuracy: manifest.tolerance,
-                "background_mix mismatch for \(golden.name)"
+                "background_mix mismatch for \(name)"
             )
             XCTAssertEqual(
                 analysis.infoScore, golden.infoScore,
                 accuracy: manifest.tolerance,
-                "info_score mismatch for \(golden.name)"
+                "info_score mismatch for \(name)"
             )
             let actual = analysis.features.asDictionary()
             for (dimension, expected) in golden.features {
@@ -116,7 +115,7 @@ final class GoldenFeaturesTests: XCTestCase {
                 XCTAssertEqual(
                     value, expected,
                     accuracy: manifest.tolerance,
-                    "\(dimension) mismatch for \(golden.name)"
+                    "\(dimension) mismatch for \(name)"
                 )
             }
         }
