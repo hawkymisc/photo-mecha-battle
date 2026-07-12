@@ -1,0 +1,52 @@
+# Phase 0a: bird-form mecha LoRA for runwayml/stable-diffusion-v1-5
+# Used with kohya_ss sd-scripts (train_network.py).
+# Generate dataset first:
+#   python scripts/phase0/prepare_bird_lora_dataset.py
+
+[model]
+pretrained_model_name_or_path = "runwayml/stable-diffusion-v1-5"
+v2 = false
+v_parameterization = false
+
+[dataset]
+train_data_dir = "data/phase0/mecha_bird_lora/train"
+resolution = "512,512"
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 768
+bucket_reso_steps = 64
+cache_latents = true
+shuffle_caption = false
+
+[lora]
+network_module = "networks.lora"
+network_dim = 16
+network_alpha = 16
+
+[training]
+output_dir = "artifacts/phase0/mecha_bird_lora"
+output_name = "pmb_bird_mecha_lora"
+save_model_as = "safetensors"
+save_every_n_epochs = 5
+max_train_epochs = 12
+train_batch_size = 1
+gradient_accumulation_steps = 4
+learning_rate = 1e-4
+lr_scheduler = "cosine"
+lr_warmup_steps = 100
+optimizer_type = "AdamW8bit"
+mixed_precision = "fp16"
+seed = 42
+max_data_loader_n_workers = 2
+persistent_data_loader_workers = true
+clip_skip = 2
+
+[inference_defaults]
+mode = "img2img"
+prompt = "mecha robot, bird form, pmbbirdmech, preserving silhouette, original object colors"
+negative_prompt = "real weapon, gore, copyrighted character, logo, text watermark"
+denoise_strength = 0.75
+steps = 20
+cfg_scale = 7.0
+width = 512
+height = 512
