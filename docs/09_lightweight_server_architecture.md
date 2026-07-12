@@ -155,6 +155,11 @@ sequenceDiagram
 > seed は後方互換のため受理するが無視する（PLAN D-007 対応済み）。
 > `POST /mechs` の `form` も同様に、クライアント値を無視してサーバーが `form_inference/1.0` で
 > 推定・確定する（PLAN D-013 対応済み）。
+> `POST /mechs` の主経路（multipart: `payload` JSON + `crop` 画像）は実装済み。crop は
+> 「アルファチャンネル = 確定マスク」の RGBA PNG を正とし、サーバーは phash / クォータ /
+> 安全性ゲート / 特徴量再計算（差分 ε=0.05 超は 422 `feature_mismatch` で reject）を経て確定する。
+> クライアント移植の一致検証用ゴールデンフィクスチャは `tests/golden/`
+> （再生成: `scripts/generate_golden_features.py`）。
 
 ## API 設計（本設計の正）
 
@@ -195,9 +200,15 @@ sequenceDiagram
 }
 ```
 
-- `crop` 画像は multipart の別パート、または直前に取得した `object_id` 参照。
+- `crop` 画像は multipart の別パート（フィールド名 `crop`、上記 JSON は `payload` フィールド）、
+  または直前に取得した `object_id` 参照（JSON ボディの互換経路）。
+- crop は「アルファチャンネル = 確定マスク」の RGBA PNG。サーバーはアルファから
+  マスク・background_mix を導出して特徴量を再計算する（実装正本: `vision/analysis.py` の
+  `analyze_rgba_crop`）。
 - `form` はリクエストに含めない（含まれてもサーバー推定で上書き）。応答に `form` と `form_inference_version` を返す。
-- サーバー応答の `stats` は**確定値**。クライアントプレビューと異なる場合がある。
+- サーバー応答の `stats` / `features` / `info_score` は**確定値**。クライアントプレビューと異なる場合がある。
+- エラー応答: 409（phash 重複）、422（`feature_mismatch` / `unsupported_algo_version` /
+  `unsafe_capture`）、429（クォータ超過）、400（multipart 不備・画像デコード不能）。
 
 | メソッド | パス | 用途 |
 |---|---|---|

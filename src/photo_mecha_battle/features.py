@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# docs/09 クライアント厚め経路: クライアントは特徴量算出アルゴリズムのバージョンを
+# `algo_version` として必ず送信し、サーバー実装とずれた場合に拒否・再計算できるようにする。
+FEATURES_ALGO_VERSION = "features/1.0"
+
 
 @dataclass(frozen=True)
 class FeatureVector:

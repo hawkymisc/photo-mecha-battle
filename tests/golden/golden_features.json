@@ -1,0 +1,64 @@
+{
+  "algo_version": "features/1.0",
+  "form_inference_version": "form_inference/1.0",
+  "tolerance": 0.05,
+  "cases": {
+    "elongated": {
+      "image": "elongated.png",
+      "background_mix": 0.866575,
+      "features": {
+        "visual_entropy": 0.08583539812419962,
+        "edge_complexity": 0.1084,
+        "color_diversity": 0.28515625,
+        "shape_complexity": 0.558641975308642,
+        "semantic_rarity": 0.23212937499999997,
+        "capture_quality": 0.09181372549019608,
+        "size_balance": 0.9527857142857142,
+        "area": 0.366525,
+        "elongation": 0.7448559670781894,
+        "roundness": 0.6275720164609053,
+        "symmetry": 0.6183206106870229
+      },
+      "info_score": 0.24974217909065152,
+      "form": "bird"
+    },
+    "round": {
+      "image": "round.png",
+      "background_mix": 0.5231250000000001,
+      "features": {
+        "visual_entropy": 0.14635915504535096,
+        "edge_complexity": 0.1408,
+        "color_diversity": 0.640625,
+        "shape_complexity": 0.26655629139072845,
+        "semantic_rarity": 0.4906775,
+        "capture_quality": 0.33624795752,
+        "size_balance": 0.26350000000000007,
+        "area": 0.607775,
+        "elongation": 0.3554083885209713,
+        "roundness": 0.8222958057395143,
+        "symmetry": 0.967948717948718
+      },
+      "info_score": 0.296694528221947,
+      "form": "beast"
+    },
+    "symmetric": {
+      "image": "symmetric.png",
+      "background_mix": 0.7269749999999999,
+      "features": {
+        "visual_entropy": 0.13708821730327544,
+        "edge_complexity": 0.3904,
+        "color_diversity": 0.92578125,
+        "shape_complexity": 0.3985148514851485,
+        "semantic_rarity": 0.7651668749999999,
+        "capture_quality": 0.40939093137254895,
+        "size_balance": 0.8384999999999998,
+        "area": 0.406525,
+        "elongation": 0.5313531353135313,
+        "roundness": 0.7343234323432344,
+        "symmetry": 0.7709923664122138
+      },
+      "info_score": 0.4703772501858461,
+      "form": "human"
+    }
+  }
+}

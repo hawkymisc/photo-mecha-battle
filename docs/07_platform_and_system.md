@@ -68,6 +68,7 @@ FastAPI 標準の `{"detail": "..."}` 形式とする。
 | 403 | 他ユーザーのリソースへのアクセス |
 | 404 | リソース不存在 |
 | 409 | 重複撮影（perceptual hash 判定。[`docs/02`](02_photo_object_extraction.md)） |
+| 422 | 検証拒否（`unsafe_capture` / `feature_mismatch` / `unsupported_algo_version`。[`docs/09`](09_lightweight_server_architecture.md)） |
 | 429 | 日次クォータ超過（[`docs/06`](06_monetization_and_fairness.md)） |
 
 ### 所有権

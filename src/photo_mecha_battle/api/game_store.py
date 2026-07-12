@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from io import BytesIO
 from pathlib import Path
 
+from PIL import Image
+
 from photo_mecha_battle.api.capture_pipeline import (
+    DUPLICATE_HASH_DISTANCE,
+    PENALIZED_INFO_SCORE_CAP,
+    SCORE_PENALIZED_SAFETY_REASONS,
     create_capture_from_bytes,
     detect_for_capture,
     segment_for_capture,
@@ -15,18 +21,38 @@ from photo_mecha_battle.api.limits import limits_for_user
 from photo_mecha_battle.api.store import InMemoryStore, CaptureRecord, ObjectRecord, build_demo_cpu_team
 from photo_mecha_battle.battle import BattleEngine, BattleResult
 from photo_mecha_battle.battle_log_serde import battle_log_to_payload
-from photo_mecha_battle.features import FeatureVector
-from photo_mecha_battle.mech_stats import FORM_INFERENCE_VERSION
+from photo_mecha_battle.features import FEATURES_ALGO_VERSION, FeatureVector
+from photo_mecha_battle.mech_stats import FORM_INFERENCE_VERSION, compute_info_score
 from photo_mecha_battle.models import Mech, MechForm, MechStats, Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticSet
 from photo_mecha_battle.tactics_serde import tactic_set_from_payload, tactic_set_to_payload
+from photo_mecha_battle.vision.analysis import (
+    analyze_rgba_crop,
+    assess_capture_safety,
+    hamming_distance,
+    perceptual_hash,
+)
 from photo_mecha_battle.vision.mech_art import render_mech_art
+from photo_mecha_battle.vision.segmentation import image_to_png_bytes
 
 
 class QuotaExceededError(Exception):
     def __init__(self, resource: str) -> None:
         self.resource = resource
         super().__init__(f"quota exceeded: {resource}")
+
+
+class FeatureMismatchError(Exception):
+    """docs/09 信頼モデル: クライアント申告特徴量とサーバー再計算値の差分が閾値を超えた。"""
+
+    def __init__(self, dimension: str, client_value: float, server_value: float, tolerance: float) -> None:
+        self.dimension = dimension
+        self.client_value = client_value
+        self.server_value = server_value
+        self.tolerance = tolerance
+        super().__init__(
+            f"feature mismatch: {dimension} client={client_value:.4f} server={server_value:.4f} tolerance={tolerance}"
+        )
 
 
 class GameStore:
@@ -156,6 +182,100 @@ class GameStore:
         self.db.increment_quota(user_id, "mechs_used")
         response = self._mech_response(record.id, record.object_id, record.mech)
         response["art_url"] = art_url
+        return response
+
+    # docs/09 信頼モデル: クライアント申告 feature_vector とサーバー再計算値の許容差分 ε。
+    DIRECT_FEATURE_TOLERANCE = 0.05
+
+    def create_mech_direct(
+        self,
+        user_id: str,
+        name: str,
+        algo_version: str,
+        bbox: list[float] | None,
+        client_features: FeatureVector,
+        crop_bytes: bytes,
+    ) -> dict[str, object]:
+        """docs/09 主経路: crop + features を 1 リクエストで受け取りメカを確定する。
+
+        検証順序は `/captures/upload` と揃える:
+        クォータ事前確認 → phash 重複 → 安全性ゲート → 特徴量再計算・差分検証 →
+        永続化（capture / extracted_object / mech）→ クォータ消費。
+        """
+        if algo_version != FEATURES_ALGO_VERSION:
+            raise ValueError(f"unsupported_algo_version:{algo_version}")
+        self._ensure_capture_quota(user_id)
+        self._ensure_mech_quota(user_id)
+
+        try:
+            crop = Image.open(BytesIO(crop_bytes)).convert("RGBA")
+        except Exception as exc:
+            raise ValueError(f"invalid_image:{exc}") from exc
+
+        phash = perceptual_hash(crop)
+        for existing in self.db.list_capture_hashes(user_id):
+            if hamming_distance(phash, existing) <= DUPLICATE_HASH_DISTANCE:
+                raise ValueError("duplicate_capture")
+
+        safety_status, safety_reason = assess_capture_safety(crop, phash)
+        if safety_status == "blocked":
+            raise ValueError(f"unsafe_capture:{safety_reason}")
+
+        analysis = analyze_rgba_crop(crop)
+        mask = analysis.mask
+        background_mix = analysis.background_mix
+        server_features = analysis.features
+
+        for dimension, server_value in server_features.__dict__.items():
+            client_value = getattr(client_features, dimension)
+            if abs(client_value - server_value) > self.DIRECT_FEATURE_TOLERANCE:
+                raise FeatureMismatchError(dimension, client_value, server_value, self.DIRECT_FEATURE_TOLERANCE)
+
+        info_score = compute_info_score(server_features)
+        if safety_reason in SCORE_PENALIZED_SAFETY_REASONS:
+            info_score = min(info_score, PENALIZED_INFO_SCORE_CAP)
+
+        capture_id = str(uuid.uuid4())
+        saved_capture = self.image_storage.save_capture(user_id, crop_bytes, ".png")
+        self.db.save_capture(
+            capture_id=capture_id,
+            user_id=user_id,
+            original_path=str(saved_capture),
+            perceptual_hash=phash,
+            safety_status=safety_status,
+            quality_json={"safety_reason": safety_reason} if safety_reason else {},
+        )
+
+        object_id = str(uuid.uuid4())
+        crop_path = self.image_storage.save_crop(object_id, image_to_png_bytes(crop))
+        mask_path = self.image_storage.save_mask(object_id, image_to_png_bytes(mask))
+        mask_confidence = min(0.98, 0.5 + analysis.foreground_ratio)
+        self.db.save_extracted_object(
+            object_id=object_id,
+            capture_id=capture_id,
+            bbox_json=bbox or [0.0, 0.0, 1.0, 1.0],
+            mask_path=str(mask_path),
+            crop_path=str(crop_path),
+            features_json=server_features.__dict__,
+            info_score=info_score,
+            detected_label="client_direct",
+            confidence=mask_confidence,
+            quality_json={"background_mix": background_mix},
+            safety_status=safety_status,
+        )
+        self.db.increment_quota(user_id, "captures_used")
+        self._session.objects[object_id] = ObjectRecord(
+            id=object_id,
+            capture_id=capture_id,
+            features=server_features,
+            info_score=info_score,
+        )
+
+        response = self.create_mech_for_user(user_id, object_id, name)
+        # docs/09: サーバー確定値をクライアントに返す（クライアントプレビューと異なる場合がある）。
+        response["features"] = server_features.__dict__
+        response["info_score"] = info_score
+        response["algo_version"] = FEATURES_ALGO_VERSION
         return response
 
     def _render_and_store_art(self, mech_id: str, object_id: str, form: MechForm) -> str | None:
