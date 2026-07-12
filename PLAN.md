@@ -42,7 +42,7 @@
 | ✅ | P25-004 | Mech art generation (cosmetic) | [`vision/mech_art.py`](src/photo_mecha_battle/vision/mech_art.py), `art_url` on mechs |
 | ✅ | P25-005 | Generation quotas | `GET /users/quotas`, daily limits |
 | ✅ | P25-006 | Duplicate capture guard | perceptual hash + hamming distance |
-| 🔲 | P25-007 | Mobile client (iOS/Android) | out of scope for backend MVP |
+| ⚠️ | P25-007 | Mobile client (iOS/Android) | Phase 1 縦切り実装済み（PR #34–#36）。[`docs/11`](docs/11_mobile_client_design.md) 準拠で `clients/android/`（Kotlin/Compose、エミュレータ検証済み）+ `clients/ios/`（Swift/SwiftUI、macOS CI green）。`POST /mechs` multipart 直登録経路（features/1.0 ネイティブ移植 + ゴールデン一致テスト）を使用。残: iOS 実機/シミュレータでの体験確認（PO レビュー）、Phase 2 機能（戦術編集・ランク戦・課金） |
 | ✅ | P25-008 | 動作確認用の簡易Webクライアント | [`web/`](web/)（`GET /app/` で配信）。撮影アップロード→検出→抽出→メカ生成→編成→CPU戦バトル→ログ確認→ランキングの一気通貫ループをブラウザで試せる、バックエンドAPIの薄いフロントエンド。**P25-007（本番モバイルクライアント）の代替ではない**。認証・演出・戦闘計算はすべて既存APIに委譲し、クライアント側は何も判定しない（docs/09 信頼モデル） |
 
 ## Phase D — 仕様精緻化・実装整合（2026-07-02 監査で発見）
