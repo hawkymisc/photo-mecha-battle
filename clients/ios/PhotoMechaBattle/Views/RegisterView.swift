@@ -44,11 +44,12 @@ struct RegisterView: View {
                 let response = try await model.apiClient.register(
                     name: name.trimmingCharacters(in: .whitespaces)
                 )
-                model.tokenStore.token = response.token
-                model.tokenStore.pilotName = response.name
+                try model.tokenStore.save(token: response.token, pilotName: response.name)
                 model.registered = true
             } catch let error as ApiError {
                 errorMessage = error.userMessage
+            } catch let error as KeychainWriteError {
+                errorMessage = "セッションを保存できませんでした（Keychain エラー \(error.status)）。端末を再起動して再試行してください。"
             } catch {
                 errorMessage = "登録に失敗しました: \(error.localizedDescription)"
             }
