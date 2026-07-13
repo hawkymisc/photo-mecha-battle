@@ -44,6 +44,7 @@
 - 全体構成図・責務分担 → [`docs/09`](09_lightweight_server_architecture.md) 「全体構成」「責務分担」
 - API 一覧（主経路・互換用の区別含む）→ [`docs/09`](09_lightweight_server_architecture.md) 「API 設計」
 - 信頼モデル（クライアント算出値の検証）→ [`docs/09`](09_lightweight_server_architecture.md) 「信頼モデル」
+- 環境分離（local / staging / production）→ [`docs/12`](12_environments.md)
 
 ## 認証（MVP）
 

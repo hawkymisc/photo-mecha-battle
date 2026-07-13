@@ -229,6 +229,18 @@ i2i生成はサーバーコストが高くなる可能性がある。
 - ランク戦とカジュアル戦の課金差分
 - 広告モデルの有無
 
+### 環境・運用関連
+
+方針の正本は [`docs/12`](12_environments.md)（`local` / `staging` / `production`。QA は staging 共用）。未決は同ドキュメントの E-001〜E-005:
+
+- staging / production のホスティング先（E-001）
+- staging の常時起動 vs オンデマンド（E-002）
+- API ドメイン名（E-003）
+- production バックアップの RPO/RTO（E-004）
+- 内部配布手段（TestFlight / Play 内部テスト等）（E-005）
+
+本番公開前の実装ブロッカー（設計済み・未実装）: SQLite ファイル永続化、`PMB_ENV` ガード、クライアントの staging/production フレーバー。
+
 ## ハッカソン対応：RevenueCat 組み込み
 
 ハッカソン要件として RevenueCat の組み込みを必須とする。
