@@ -233,13 +233,13 @@ i2i生成はサーバーコストが高くなる可能性がある。
 
 方針の正本は [`docs/12`](12_environments.md)（`local` / `staging` / `production`。QA は staging 共用）。未決は同ドキュメントの E-001〜E-005:
 
-- staging / production のホスティング先（E-001）
+- staging / production のホスティング先（E-001）— **候補 Cloudflare**（アカウント未。Workers では FastAPI 不可 → Containers 等を検証）
 - staging の常時起動 vs オンデマンド（E-002）
 - API ドメイン名（E-003）
 - production バックアップの RPO/RTO（E-004）
 - 内部配布手段（TestFlight / Play 内部テスト等）（E-005）
 
-本番公開前の実装ブロッカー（設計済み・未実装）: SQLite ファイル永続化、`PMB_ENV` ガード、クライアントの staging/production フレーバー。
+決定済み: DB はファイル SQLite（`PMB_DB_PATH`）。クライアント フレーバーと `PMB_ENV` 起動ガードは後回し。
 
 ## ハッカソン対応：RevenueCat 組み込み
 

@@ -46,7 +46,7 @@
 | 項目 | 方針 |
 |---|---|
 | API | 開発者端末で `uvicorn` 起動（[`/.claude/skills/run/SKILL.md`](../.claude/skills/run/SKILL.md)） |
-| DB / メディア | リポジトリの `data/`（gitignore）。SQLite ファイル永続を前提とする（現状の `:memory:` は下記ブロッカー） |
+| DB / メディア | リポジトリの `data/`（gitignore）。SQLite は `{PMB_DATA_DIR}/pmb.sqlite3`（`PMB_DB_PATH` で上書き可） |
 | クライアント API URL | Android エミュレータ: `http://10.0.2.2:<port>` / iOS シミュレータ: `http://127.0.0.1:<port>` / 実機: `http://<LAN IP>:<port>` |
 | TLS | 不要（cleartext は **debug ビルドのみ**） |
 | 課金 | RevenueCat **sandbox**。`PMB_ADMIN_TOKEN` はデモ付与用に設定可 |
@@ -96,19 +96,33 @@
 
 | 変数 | 意味 | local | staging | production |
 |---|---|---|---|---|
-| `PMB_DATA_DIR` | DB・メディアのルート | `data`（既定） | 環境専用パス | 環境専用パス |
-| `PMB_DB_PATH` | SQLite ファイルパス（導入後） | `data/pmb.sqlite3` | 永続パス | 永続パス |
+| `PMB_DATA_DIR` | メディア等のルート | `data`（既定） | 環境専用パス | 環境専用パス |
+| `PMB_DB_PATH` | SQLite ファイルパス | 未設定時 `{PMB_DATA_DIR}/pmb.sqlite3` | 永続パス | 永続パス |
 | `PMB_WEB_DIR` | `/app` 静的配信元 | `web/` | 未設定または内部のみ | **未設定（マウントしない）** |
 | `PMB_ADMIN_TOKEN` | デモ Entitlement 付与 | 任意 | 設定可（本番と別値） | **未設定** |
 | `PMB_REVENUECAT_WEBHOOK_SECRET` | Webhook 認証 | 任意 | sandbox 用 | **必須** |
-| `PMB_ENV` | 環境 ID（ログ・ガード用） | `local` | `staging` | `production` |
+| `PMB_ENV` | 環境ラベル（任意・後述） | `local`（推奨） | `staging` | `production` |
 | クライアント `PMB_API_BASE_URL` | API オリジン | エミュ向け既定 | staging HTTPS | production HTTPS |
+
+### `PMB_ENV` とは何か
+
+アプリが「今どの環境として動いているか」を自分で知るための**文字列ラベル**である。ホスト名やデプロイ先そのものではない。
+
+想定用途（実装は後回し可）:
+
+- ログやエラー通知に `env=production` と付ける
+- `PMB_ENV=production` のときだけ厳しい起動チェックをかける  
+  例: `PMB_ADMIN_TOKEN` が設定されていたら起動失敗（デモ API の本番誤開放を防ぐ）  
+  例: `/app` Web デモをマウントしない
+
+未設定でも API は動く。**必須ではない。** 本番公開前にガードを入れる段階で本格利用する。
 
 クライアント側:
 
 - Android: `BuildConfig.PMB_API_BASE_URL`（Gradle `-PpmbApiBaseUrl=`）
 - iOS: scheme / xcconfig の `PMB_API_BASE_URL`
 - **release ビルドに local IP / cleartext を埋め込まない**（Android は debug manifest overlay で cleartext を限定済み）
+- staging / production 向け **ビルドフレーバーは後回し**（当面は URL をビルド引数で差し替え）
 
 ## データ分離と不可逆操作
 
@@ -131,15 +145,20 @@
 | `develop` → `main`（計画リリース） | production デプロイの候補。ノールックマージ対象外 |
 | ホットフィックス | `main` から `fix/*` → `main` と `develop` へ戻しマージ（手順はリリース運用で追記） |
 
-**ホスティング先（Fly.io / Railway / Cloud Run / VPS 等）は未決。** 選定基準のみ固定する:
+**ホスティング先:** 候補は **Cloudflare**（アカウント未作成・未契約）。選定基準は維持する:
 
 1. HTTPS 終端が容易
-2. 永続ボリュームまたはオブジェクトストレージが使える
+2. 永続ボリュームまたはオブジェクトストレージが使える（SQLite ファイル or R2）
 3. 環境変数でシークレットを渡せる
-4. 単一コンテナ/プロセスで FastAPI を起動できる
+4. **単一プロセスで FastAPI（Python）を起動できる**
 5. 月額コストがハッカソン〜β 規模に見合う
 
-選定結果は本ドキュメントの「未決の解消」節に追記し、[`docs/08`](08_mvp_and_roadmap.md) の未決からも落とす。
+**Cloudflare 採用時の注意:** Workers 単体では既存の FastAPI をそのまま動かない。現実的な形は次のいずれか。
+
+- **Cloudflare Containers**（コンテナで uvicorn を動かす）+ 永続ディスク / R2
+- API は別の安い PaaS、Cloudflare は DNS・TLS・将来の R2/CDN のみ
+
+アカウント作成後に E-001 を確定する。選定結果は本節と [`docs/08`](08_mvp_and_roadmap.md) を更新する。
 
 ## フェーズとの対応
 
@@ -152,12 +171,14 @@
 
 ## 実装ブロッカー（現状コードとの差分）
 
-以下は環境設計を満たすために **本番公開前に必須**。設計変更ではなく実装ギャップ。
+設計変更ではなく実装ギャップ。PO 決定反映済みの項目はステータスを更新する。
 
-1. **DB がプロセスメモリ** — [`app.py`](../src/photo_mecha_battle/api/app.py) が `Database(":memory:")` のため、プロセス再起動でユーザ・バトルが消える。`PMB_DB_PATH` によるファイル SQLite（または相当）へ切り替える。
-2. **`PMB_ENV` ガード未実装** — production で `PMB_ADMIN_TOKEN` 設定ミスや `/app` 誤配信を防ぐ起動時チェックを入れる（`PMB_ENV=production` のとき admin トークン設定で起動失敗、など）。
-3. **ホスティング未選定** — staging を先に 1 台用意し、同じ手順を production に複製する。
-4. **クライアントの環境フレーバー** — staging / production の API URL を取り違えないビルド種別（productFlavor / xcconfig）。
+| 項目 | 状態 | 内容 |
+|---|---|---|
+| SQLite ファイル永続化 | **採用・実装** | `PMB_DB_PATH` または `{PMB_DATA_DIR}/pmb.sqlite3`。テストは `:memory:` 差し替えを維持 |
+| `PMB_ENV` ガード | 後回し | ラベルの意味は上記。production 向け起動チェックは公開前に入れる |
+| ホスティング | 候補 Cloudflare（アカウント未） | Containers 等で FastAPI を動かせるか検証してから契約 |
+| クライアント フレーバー | **後回し** | 当面は `-PpmbApiBaseUrl` / scheme 環境変数で URL 差し替え |
 
 ## 将来拡張（今はやらない）
 
@@ -169,10 +190,13 @@
 
 ## 未決の解消（PO / 運用判断待ち）
 
-| ID | 内容 | 判断に必要な情報 |
+| ID | 内容 | 状態 |
 |---|---|---|
-| E-001 | staging / production のホスティング先 | 予算、誰が運用するか、ハッカソン期限 |
-| E-002 | staging の常時起動 vs オンデマンド | PO レビュー頻度 |
-| E-003 | ドメイン名（例: `api-staging.` / `api.`） | 所有ドメインの有無 |
-| E-004 | production バックアップ頻度と復旧目標（RPO/RTO） | β 公開の本気度 |
-| E-005 | 内部配布手段（TestFlight / Play 内部テスト / 別経路） | Apple/Google アカウント準備状況 |
+| E-001 | staging / production のホスティング先 | **候補 Cloudflare**（アカウント未）。Workers 非対応のため Containers 等を要検証 |
+| E-002 | staging の常時起動 vs オンデマンド | 未決（PO レビュー頻度次第） |
+| E-003 | ドメイン名（例: `api-staging.` / `api.`） | 未決 |
+| E-004 | production バックアップ頻度と復旧目標（RPO/RTO） | 未決 |
+| E-005 | 内部配布手段（TestFlight / Play 内部テスト等） | 未決 |
+| — | DB 永続化方式 | **決定: ファイル SQLite**（`PMB_DB_PATH`） |
+| — | クライアント フレーバー | **後回し**（URL 差し替えで暫定） |
+| — | `PMB_ENV` 起動ガード | **後回し**（公開前） |
