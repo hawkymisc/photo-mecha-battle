@@ -1,12 +1,7 @@
 from fastapi.testclient import TestClient
 
 from photo_mecha_battle.api.app import app
-from photo_mecha_battle.api.limits import (
-    FREE_DAILY_CAPTURES,
-    FREE_DAILY_MECHS,
-    PREMIUM_DAILY_CAPTURES,
-    PREMIUM_DAILY_MECHS,
-)
+from photo_mecha_battle.api.limits import FREE_DAILY_CAPTURES, FREE_DAILY_MECHS
 from photo_mecha_battle.tactics import ActionType, ConditionKind, TacticPreset, build_preset
 
 client = TestClient(app)
@@ -122,7 +117,7 @@ def test_tactic_editor_roundtrip():
         headers=_headers(user["token"]),
     ).json()
     assert updated["name"] == "カスタム改"
-    fetched = client.get(f"/tactics/{tactic['id']}").json()
+    fetched = client.get(f"/tactics/{tactic['id']}", headers=_headers(user["token"])).json()
     assert fetched["fallback_action"] == ActionType.NORMAL_SHOT.value
 
 
@@ -290,6 +285,7 @@ def test_tactic_simulate_endpoint():
     response = client.post(
         f"/tactics/{row['front_tactic_id']}/simulate",
         json={"mech_id": row["front_mech_id"], "seed": 3},
+        headers=_headers(user["token"]),
     )
     assert response.status_code == 200
     body = response.json()
@@ -298,9 +294,11 @@ def test_tactic_simulate_endpoint():
 
 
 def test_tactic_simulate_unknown_tactic_returns_404():
+    user = _register("SimulatorMissing")
     response = client.post(
         "/tactics/missing/simulate",
         json={"mech_id": "missing", "seed": 1},
+        headers=_headers(user["token"]),
     )
     assert response.status_code == 404
 
@@ -312,6 +310,105 @@ def test_tactic_simulate_unknown_mech_returns_404():
     response = client.post(
         f"/tactics/{row['front_tactic_id']}/simulate",
         json={"mech_id": "missing", "seed": 1},
+        headers=_headers(user["token"]),
+    )
+    assert response.status_code == 404
+
+
+def test_tactic_simulate_requires_auth():
+    user = _register("SimulatorAuth")
+    team = _build_team_assets(user["token"])
+    row = client.get(f"/teams/{team['id']}", headers=_headers(user["token"])).json()
+    response = client.post(
+        f"/tactics/{row['front_tactic_id']}/simulate",
+        json={"mech_id": row["front_mech_id"], "seed": 1},
+    )
+    assert response.status_code == 401
+
+
+def test_tactic_and_mech_get_require_ownership():
+    owner = _register("AssetOwner")
+    intruder = _register("AssetIntruder")
+    team = _build_team_assets(owner["token"])
+    row = client.get(f"/teams/{team['id']}", headers=_headers(owner["token"])).json()
+
+    assert client.get(f"/tactics/{row['front_tactic_id']}").status_code == 401
+    assert client.get(f"/mechs/{row['front_mech_id']}").status_code == 401
+    assert (
+        client.get(f"/tactics/{row['front_tactic_id']}", headers=_headers(intruder["token"])).status_code
+        == 403
+    )
+    assert (
+        client.get(f"/mechs/{row['front_mech_id']}", headers=_headers(intruder["token"])).status_code
+        == 403
+    )
+    assert (
+        client.get(f"/tactics/{row['front_tactic_id']}", headers=_headers(owner["token"])).status_code
+        == 200
+    )
+    assert (
+        client.get(f"/mechs/{row['front_mech_id']}", headers=_headers(owner["token"])).status_code
+        == 200
+    )
+
+
+def test_team_create_rejects_other_users_assets():
+    """BE-002 / BF-002: 他ユーザーのメカ・戦術をチームに組み込めない。"""
+    owner = _register("TeamOwner")
+    attacker = _register("TeamAttacker")
+    victim_team = _build_team_assets(owner["token"])
+    victim = client.get(f"/teams/{victim_team['id']}", headers=_headers(owner["token"])).json()
+    attacker_team = _build_team_assets(attacker["token"], label="stone")
+    attacker_assets = client.get(
+        f"/teams/{attacker_team['id']}", headers=_headers(attacker["token"])
+    ).json()
+
+    response = client.post(
+        "/teams",
+        json={
+            "name": "Stolen Power",
+            "slots": [
+                {
+                    "mech_id": victim["front_mech_id"],
+                    "tactic_id": attacker_assets["front_tactic_id"],
+                    "position": "front",
+                },
+                {
+                    "mech_id": attacker_assets["middle_mech_id"],
+                    "tactic_id": attacker_assets["middle_tactic_id"],
+                    "position": "middle",
+                },
+                {
+                    "mech_id": attacker_assets["back_mech_id"],
+                    "tactic_id": attacker_assets["back_tactic_id"],
+                    "position": "back",
+                },
+            ],
+        },
+        headers=_headers(attacker["token"]),
+    )
+    assert response.status_code == 403
+
+
+def test_team_create_rejects_missing_mech():
+    user = _register("MissingRef")
+    team = _build_team_assets(user["token"])
+    assets = client.get(f"/teams/{team['id']}", headers=_headers(user["token"])).json()
+    response = client.post(
+        "/teams",
+        json={
+            "name": "Broken",
+            "slots": [
+                {"mech_id": "missing-mech", "tactic_id": assets["front_tactic_id"], "position": "front"},
+                {
+                    "mech_id": assets["middle_mech_id"],
+                    "tactic_id": assets["middle_tactic_id"],
+                    "position": "middle",
+                },
+                {"mech_id": assets["back_mech_id"], "tactic_id": assets["back_tactic_id"], "position": "back"},
+            ],
+        },
+        headers=_headers(user["token"]),
     )
     assert response.status_code == 404
 
@@ -481,26 +578,48 @@ def test_get_billing_entitlements_endpoint():
     )
 
 
-def test_billing_sync_reconciles_known_entitlements_only():
+def test_billing_sync_ignores_client_declared_entitlements():
+    """BE-001 / BF-001: クライアント自己申告では Entitlement を付与できない。"""
     user = _register("Syncer")
     headers = _headers(user["token"])
 
     synced = client.post(
         "/billing/sync",
-        json={"active_entitlements": ["premium_tactics", "battle_log_summary", "not_a_real_key"]},
+        json={"active_entitlements": ["premium_tactics", "battle_log_summary", "generation_boost"]},
         headers=headers,
-    ).json()
-    active_keys = {item["key"] for item in synced["entitlements"] if item["is_active"]}
-    assert active_keys == {"premium_tactics", "battle_log_summary"}
+    )
+    assert synced.status_code == 200
+    active_keys = {item["key"] for item in synced.json()["entitlements"] if item["is_active"]}
+    assert active_keys == set()
 
-    # A subsequent sync without a previously-active key revokes it (full snapshot semantics).
+
+def test_billing_sync_does_not_revoke_webhook_granted_entitlements():
+    """空の自己申告でも Webhook 付与済み権利を消さない。"""
+    from tests.conftest import REVENUECAT_WEBHOOK_SECRET
+
+    user = _register("SyncKeep")
+    headers = _headers(user["token"])
+    grant = client.post(
+        "/billing/revenuecat/webhook",
+        headers={"Authorization": REVENUECAT_WEBHOOK_SECRET},
+        json={
+            "event": {
+                "id": "evt-sync-keep-1",
+                "type": "INITIAL_PURCHASE",
+                "app_user_id": user["user_id"],
+                "entitlement_ids": ["generation_boost", "premium_tactics"],
+            }
+        },
+    )
+    assert grant.status_code == 200
+
     resynced = client.post(
         "/billing/sync",
-        json={"active_entitlements": ["extra_tactic_slots"]},
+        json={"active_entitlements": []},
         headers=headers,
     ).json()
-    active_keys_after = {item["key"] for item in resynced["entitlements"] if item["is_active"]}
-    assert active_keys_after == {"extra_tactic_slots"}
+    active_keys = {item["key"] for item in resynced["entitlements"] if item["is_active"]}
+    assert active_keys == {"generation_boost", "premium_tactics"}
 
 
 def test_billing_sync_does_not_change_generation_quota():
@@ -512,10 +631,10 @@ def test_billing_sync_does_not_change_generation_quota():
     assert quotas["mechs"]["limit"] == FREE_DAILY_MECHS
 
 
-def test_billing_sync_with_generation_boost_increases_quota():
+def test_billing_sync_client_cannot_self_grant_generation_boost():
     user = _register("SyncBoost")
     headers = _headers(user["token"])
     client.post("/billing/sync", json={"active_entitlements": ["generation_boost"]}, headers=headers)
     quotas = client.get("/users/quotas", headers=headers).json()
-    assert quotas["captures"]["limit"] == PREMIUM_DAILY_CAPTURES
-    assert quotas["mechs"]["limit"] == PREMIUM_DAILY_MECHS
+    assert quotas["captures"]["limit"] == FREE_DAILY_CAPTURES
+    assert quotas["mechs"]["limit"] == FREE_DAILY_MECHS
