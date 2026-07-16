@@ -11,14 +11,29 @@
 
 ## ビルド・テスト
 
-JDK 17 と Android SDK (platform 34) が必要。`local.properties` に `sdk.dir` を設定する。
+JDK 17 と Android SDK (platform 34) が必要。
+
+**推奨（自動）** — リポジトリルートから:
 
 ```bash
-# 単体テスト（features/1.0 ゴールデン一致・API 契約。Android SDK 不要）
-gradle :core:test
+# テストのみ
+bash scripts/android_dev.sh --test
+
+# ビルド + エミュレータへインストール + 起動
+# (.tooling/ の JDK/SDK を自動使用、API ポートは 8000/8001 を自動検出)
+bash scripts/android_dev.sh --launch
+```
+
+手動で Gradle を叩く場合は `clients/android/` で `./gradlew` を使う。初回は `local.properties` に `sdk.dir` が必要（`android_dev.sh` が自動生成する）。
+
+```bash
+cd clients/android
+
+# 単体テスト（features/1.0 ゴールデン一致・API 契約）
+./gradlew :core:test
 
 # デバッグ APK
-gradle :app:assembleDebug
+./gradlew :app:assembleDebug
 ```
 
 `core:test` は `tests/golden/`（リポジトリ共有のゴールデンフィクスチャ）に対して
@@ -27,18 +42,18 @@ gradle :app:assembleDebug
 ## エミュレータでの実地確認
 
 ```bash
-# バックエンド起動（リポジトリルート）
-uvicorn photo_mecha_battle.api.app:app --host 0.0.0.0 --port 8000
+# バックエンド起動（リポジトリルート。8000 が埋まっている場合は --port 8001）
+python -m uvicorn photo_mecha_battle.api.app:app --host 0.0.0.0 --port 8000
 
-# インストールと起動（デフォルトの API 先はエミュレータから見たホスト 10.0.2.2:8000）
-adb install app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.photomecha.battle/.MainActivity
+# ワンコマンド（ビルド → インストール → 起動）
+bash scripts/android_dev.sh --launch
 ```
 
-API 接続先は Gradle プロパティで変更できる:
+API 接続先の上書き:
 
 ```bash
-gradle :app:assembleDebug -PpmbApiBaseUrl=http://192.168.x.x:8000
+bash scripts/android_dev.sh --port 8001 --launch
+bash scripts/android_dev.sh --api-url=http://192.168.x.x:8000 --launch
 ```
 
 ## 設計上の不変条件（AGENTS.md）
