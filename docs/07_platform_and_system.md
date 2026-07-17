@@ -201,4 +201,5 @@ RevenueCat Webhook の本実装時（Phase 3）に追加する。
 - クライアント: SDK 初期化、App User ID とアプリ内ユーザー ID の紐づけ、Offerings 取得、
   Paywall 表示、購入、購入復元、CustomerInfo 取得、Entitlement に応じた機能解放
 - バックエンド: Webhook 受信 → `user_entitlements` 同期。クライアントだけで課金状態を確定しない
+- `POST /billing/sync` はサーバー保持状態の再読込のみ。クライアントの `active_entitlements` 申告で付与・失効しない（RevenueCat サーバー API 照会が実装されるまでは fail-closed）
 - ランク戦での戦術条件・行動・スロット数は Entitlement に依存させない

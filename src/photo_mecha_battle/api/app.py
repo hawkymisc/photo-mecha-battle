@@ -11,7 +11,12 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from photo_mecha_battle.api.database import Database, UserRow
 from photo_mecha_battle.api.db_path import resolve_db_path
-from photo_mecha_battle.api.game_store import FeatureMismatchError, GameStore, QuotaExceededError
+from photo_mecha_battle.api.game_store import (
+    FeatureMismatchError,
+    GameStore,
+    QuotaExceededError,
+    ResourceAccessError,
+)
 from photo_mecha_battle.api.store import build_demo_cpu_team
 from photo_mecha_battle.features import FEATURES_ALGO_VERSION, FeatureVector
 from photo_mecha_battle.models import MechForm, Position
@@ -212,16 +217,19 @@ def _team_slots_to_row(user_id: str, name: str, slots: list[TeamSlotConfig]):
     by_position = {slot.position: slot for slot in slots}
     if set(by_position) != {Position.FRONT, Position.MIDDLE, Position.BACK}:
         raise HTTPException(status_code=400, detail="team must include front, middle, and back")
-    return store.create_team(
-        user_id=user_id,
-        name=name,
-        front_mech_id=by_position[Position.FRONT].mech_id,
-        front_tactic_id=by_position[Position.FRONT].tactic_id,
-        middle_mech_id=by_position[Position.MIDDLE].mech_id,
-        middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
-        back_mech_id=by_position[Position.BACK].mech_id,
-        back_tactic_id=by_position[Position.BACK].tactic_id,
-    )
+    try:
+        return store.create_team(
+            user_id=user_id,
+            name=name,
+            front_mech_id=by_position[Position.FRONT].mech_id,
+            front_tactic_id=by_position[Position.FRONT].tactic_id,
+            middle_mech_id=by_position[Position.MIDDLE].mech_id,
+            middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
+            back_mech_id=by_position[Position.BACK].mech_id,
+            back_tactic_id=by_position[Position.BACK].tactic_id,
+        )
+    except ResourceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @app.post("/auth/register")
@@ -401,20 +409,17 @@ def list_mechs(user: UserRow = Depends(require_user), game_store: GameStore = De
 
 
 @app.get("/mechs/{mech_id}")
-def get_mech(mech_id: str, game_store: GameStore = Depends(get_store)):
+def get_mech(
+    mech_id: str,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
     record = game_store.get_persisted_mech(mech_id)
     if record is None:
-        legacy = game_store.mechs.get(mech_id)
-        if legacy is None:
-            raise HTTPException(status_code=404, detail="mech not found")
-        mech = legacy.mech
-        return {
-            "id": legacy.id,
-            "object_id": legacy.object_id,
-            "name": mech.name,
-            "form": mech.form.value,
-            "stats": mech.stats.__dict__,
-        }
+        # 所有者が紐づかないレガシー in-memory メカは公開しない（BE-003）。
+        raise HTTPException(status_code=404, detail="mech not found")
+    if record["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
     return record
 
 
@@ -443,10 +448,16 @@ def create_tactic(body: TacticCreateRequest, user: UserRow = Depends(require_use
 
 
 @app.get("/tactics/{tactic_id}")
-def get_tactic(tactic_id: str, game_store: GameStore = Depends(get_store)):
+def get_tactic(
+    tactic_id: str,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
     row = game_store.db.get_tactic(tactic_id)
     if row is None:
         raise HTTPException(status_code=404, detail="tactic not found")
+    if row["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
     return {"id": row["id"], **row["payload"]}
 
 
@@ -475,10 +486,19 @@ class TacticSimulateRequest(BaseModel):
 def simulate_tactic(
     tactic_id: str,
     body: TacticSimulateRequest,
+    user: UserRow = Depends(require_user),
     game_store: GameStore = Depends(get_store),
 ):
-    if game_store.db.get_tactic(tactic_id) is None:
+    tactic_row = game_store.db.get_tactic(tactic_id)
+    if tactic_row is None:
         raise HTTPException(status_code=404, detail="tactic not found")
+    if tactic_row["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
+    mech_row = game_store.db.get_mech(body.mech_id)
+    if mech_row is None:
+        raise HTTPException(status_code=404, detail=f"mech not found: {body.mech_id}")
+    if mech_row["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
     try:
         result = game_store.simulate_tactic(tactic_id, body.mech_id, body.seed)
     except ValueError as exc:
@@ -516,17 +536,20 @@ def update_team(
     by_position = {slot.position: slot for slot in body.slots}
     if set(by_position) != {Position.FRONT, Position.MIDDLE, Position.BACK}:
         raise HTTPException(status_code=400, detail="team must include front, middle, and back")
-    team = game_store.update_team(
-        team_id=team_id,
-        user_id=user.id,
-        name=body.name,
-        front_mech_id=by_position[Position.FRONT].mech_id,
-        front_tactic_id=by_position[Position.FRONT].tactic_id,
-        middle_mech_id=by_position[Position.MIDDLE].mech_id,
-        middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
-        back_mech_id=by_position[Position.BACK].mech_id,
-        back_tactic_id=by_position[Position.BACK].tactic_id,
-    )
+    try:
+        team = game_store.update_team(
+            team_id=team_id,
+            user_id=user.id,
+            name=body.name,
+            front_mech_id=by_position[Position.FRONT].mech_id,
+            front_tactic_id=by_position[Position.FRONT].tactic_id,
+            middle_mech_id=by_position[Position.MIDDLE].mech_id,
+            middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
+            back_mech_id=by_position[Position.BACK].mech_id,
+            back_tactic_id=by_position[Position.BACK].tactic_id,
+        )
+    except ResourceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return {"id": team.id, "name": team.name}
 
 
@@ -701,11 +724,13 @@ def update_entitlement(
 
 @app.post("/billing/sync")
 def sync_billing(
-    body: BillingSyncRequest,
     user: UserRow = Depends(require_user),
     game_store: GameStore = Depends(get_store),
+    body: BillingSyncRequest | None = None,
 ):
-    return game_store.sync_client_entitlements(user.id, body.active_entitlements)
+    # body は後方互換のため受け付けるが、active_entitlements は権威にしない（BE-001 / BF-001）。
+    _ = body
+    return game_store.sync_client_entitlements(user.id)
 
 
 @app.post("/billing/revenuecat/webhook")

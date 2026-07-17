@@ -260,7 +260,7 @@ sequenceDiagram
 |---|---|---|
 | GET | `/billing/status` | サーバー |
 | POST | `/billing/revenuecat/webhook` | サーバー |
-| POST | `/billing/sync` | サーバー（クライアント CustomerInfo の同期） |
+| POST | `/billing/sync` | サーバー（サーバー保持 Entitlement の再読込。クライアント申告は権威にしない） |
 
 Entitlement は戦術スロット数・条件・行動を増やさない（[`docs/06`](06_monetization_and_fairness.md)）。
 

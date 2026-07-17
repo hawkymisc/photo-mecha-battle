@@ -42,8 +42,13 @@ def test_create_mech_with_unknown_object_returns_404(auth_headers):
     assert response.status_code == 404
 
 
-def test_get_unknown_mech_returns_404():
-    assert client.get("/mechs/missing").status_code == 404
+def test_get_unknown_mech_returns_404(auth_headers):
+    headers = {"X-User-Token": auth_headers["X-User-Token"]}
+    assert client.get("/mechs/missing", headers=headers).status_code == 404
+
+
+def test_get_mech_without_token_returns_401():
+    assert client.get("/mechs/missing").status_code == 401
 
 
 def test_battle_requires_three_slots(auth_headers):
@@ -100,7 +105,7 @@ def test_get_mech_and_ranking_endpoints(auth_headers):
         json={"object_id": segment["id"], "form": "beast", "name": "石メカ"},
         headers=headers,
     ).json()
-    fetched = client.get(f"/mechs/{mech['id']}").json()
+    fetched = client.get(f"/mechs/{mech['id']}", headers=headers).json()
     assert fetched["name"] == "石メカ"
     ranking = client.get("/ranking").json()
     assert ranking["entries"][0]["rating"] == 1000

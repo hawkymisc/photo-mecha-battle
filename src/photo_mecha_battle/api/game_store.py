@@ -43,6 +43,15 @@ class QuotaExceededError(Exception):
         super().__init__(f"quota exceeded: {resource}")
 
 
+class ResourceAccessError(Exception):
+    """所有権・存在チェック失敗（API 層で HTTP ステータスへ写像する）。"""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(detail)
+
+
 class FeatureMismatchError(Exception):
     """docs/09 信頼モデル: クライアント申告特徴量とサーバー再計算値の差分が閾値を超えた。"""
 
@@ -372,6 +381,26 @@ class GameStore:
         cpu_team, cpu_tactics = build_demo_cpu_team()
         return BattleEngine().simulate(player_team, player_tactics, cpu_team, cpu_tactics, seed=seed)
 
+    def _assert_owned_team_refs(
+        self,
+        user_id: str,
+        mech_ids: list[str],
+        tactic_ids: list[str],
+    ) -> None:
+        """docs/07 所有権: チームが参照するメカ・戦術は呼出ユーザー所有であること。"""
+        for mech_id in mech_ids:
+            row = self.db.get_mech(mech_id)
+            if row is None:
+                raise ResourceAccessError(404, f"mech not found: {mech_id}")
+            if row["user_id"] != user_id:
+                raise ResourceAccessError(403, "forbidden")
+        for tactic_id in tactic_ids:
+            row = self.db.get_tactic(tactic_id)
+            if row is None:
+                raise ResourceAccessError(404, f"tactic not found: {tactic_id}")
+            if row["user_id"] != user_id:
+                raise ResourceAccessError(403, "forbidden")
+
     def create_team(
         self,
         user_id: str,
@@ -383,6 +412,11 @@ class GameStore:
         back_mech_id: str,
         back_tactic_id: str,
     ) -> TeamRow:
+        self._assert_owned_team_refs(
+            user_id,
+            [front_mech_id, middle_mech_id, back_mech_id],
+            [front_tactic_id, middle_tactic_id, back_tactic_id],
+        )
         team = TeamRow(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -409,6 +443,11 @@ class GameStore:
         back_mech_id: str,
         back_tactic_id: str,
     ) -> TeamRow:
+        self._assert_owned_team_refs(
+            user_id,
+            [front_mech_id, middle_mech_id, back_mech_id],
+            [front_tactic_id, middle_tactic_id, back_tactic_id],
+        )
         team = TeamRow(
             id=team_id,
             user_id=user_id,
@@ -514,16 +553,13 @@ class GameStore:
     )
     _REVOKE_EVENT_TYPES = frozenset({"CANCELLATION", "EXPIRATION"})
 
-    def sync_client_entitlements(self, user_id: str, active_keys: list[str]) -> dict[str, object]:
-        """docs/07 POST /billing/sync: クライアントの CustomerInfo とサーバー状態の同期。
+    def sync_client_entitlements(self, user_id: str) -> dict[str, object]:
+        """docs/07 POST /billing/sync: サーバー保持の Entitlement を再読込して返す。
 
-        RevenueCat Webhook が権威ソースであり、これはWebhook未達時のフォールバック
-        （docs/08 リスク対策）。既知のEntitlementキーのみを反映し、クライアント申告を
-        そのまま鵜呑みにして未知の権限を付与することはない。
+        RevenueCat Webhook / 管理者デモ付与が権威ソース。クライアント申告の
+        `active_entitlements` は書き込みに使わない（監査 BE-001 / BF-001）。
+        RevenueCat サーバー API 照会が未実装のため、検証不能な自己付与経路は fail-closed。
         """
-        active_set = {key for key in active_keys if key in self.KNOWN_ENTITLEMENT_KEYS}
-        for key in self.KNOWN_ENTITLEMENT_KEYS:
-            self.db.set_entitlement(user_id, key, key in active_set)
         return {"entitlements": self.db.get_entitlements(user_id)}
 
     def apply_revenuecat_event(
