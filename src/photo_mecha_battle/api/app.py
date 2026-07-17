@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from photo_mecha_battle.api.database import Database, UserRow
+from photo_mecha_battle.api.db_path import resolve_db_path
 from photo_mecha_battle.api.game_store import (
     FeatureMismatchError,
     GameStore,
@@ -31,7 +32,10 @@ from photo_mecha_battle.tactics import (
 )
 
 DATA_DIR = Path(os.environ.get("PMB_DATA_DIR", "data"))
-store = GameStore(db=Database(":memory:"), data_dir=DATA_DIR)
+# docs/12: 既定はファイル SQLite（{PMB_DATA_DIR}/pmb.sqlite3）。PMB_DB_PATH で上書き可。
+# テストは conftest.fresh_game_store が :memory: に差し替える。
+_DB_PATH = resolve_db_path(ensure_parent=True)
+store = GameStore(db=Database(str(_DB_PATH)), data_dir=DATA_DIR)
 app = FastAPI(title="Photo Mecha Battle API", version="0.3.0")
 app.mount("/media", StaticFiles(directory=str(store.image_storage.root)), name="media")
 
