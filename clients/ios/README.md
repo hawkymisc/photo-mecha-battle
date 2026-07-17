@@ -1,6 +1,7 @@
 # Photo Mecha Battle — iOS クライアント（Phase 1 縦切り）
 
 Swift / SwiftUI 製のネイティブクライアント。設計は [docs/11](../../docs/11_mobile_client_design.md) を正本とし、Android 版（`clients/android/`）と同一の画面構成・API 経路を実装する。
+ビルド・実機確認のまとめは [docs/13_build_and_device_verification.md](../../docs/13_build_and_device_verification.md) を参照。
 
 ## 構成
 
