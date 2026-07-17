@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Mecha Battle — 横断監査サマリー (2026-07-15)</title>
+<style>
+:root{--bg:#0f1117;--surface:#1a1d27;--border:#2a2f3d;--text:#e6e8ef;--muted:#9aa3b2;--crit:#f85149;--high:#f0883e;--med:#d29922;--low:#58a6ff;--ok:#3fb950;--accent:#a371f7}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+header{padding:2rem 1.5rem 1rem;border-bottom:1px solid var(--border);max-width:1100px;margin:0 auto}
+h1{font-size:1.5rem;margin:0 0 .25rem}h2{font-size:1.1rem;margin:2rem 0 .75rem;color:var(--accent)}
+main{max-width:1100px;margin:0 auto;padding:1rem 1.5rem 3rem}
+.meta{color:var(--muted);font-size:.9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin:1.25rem 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center}
+.card .n{font-size:1.75rem;font-weight:700}.card .l{font-size:.75rem;color:var(--muted);text-transform:uppercase}
+.crit .n{color:var(--crit)}.high .n{color:var(--high)}.med .n{color:var(--med)}.low .n{color:var(--low)}.ok .n{color:var(--ok)}
+table{width:100%;border-collapse:collapse;font-size:.875rem;margin:1rem 0}
+th,td{border:1px solid var(--border);padding:.5rem .65rem;text-align:left;vertical-align:top}
+th{background:var(--surface);color:var(--muted);font-weight:600}
+.sev{font-weight:700;white-space:nowrap}.sev-crit{color:var(--crit)}.sev-high{color:var(--high)}.sev-med{color:var(--med)}.sev-low{color:var(--low)}
+ul{padding-left:1.25rem}.links li{margin:.35rem 0}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.callout{background:var(--surface);border-left:3px solid var(--crit);padding:.75rem 1rem;margin:1rem 0;border-radius:0 6px 6px 0}
+.good{border-left-color:var(--ok)}
+footer{margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.8rem}
+</style>
+</head>
+<body>
+<header>
+<h1>Photo Mecha Battle — 横断監査サマリー</h1>
+<p class="meta">2026-07-15 · ブランチ feature/docs-environments-design · 指摘のみ（コード未変更）</p>
+</header>
+<main>
+
+<h2>総合判定</h2>
+<p>仕様の設計原則（サーバー権威・Pay to Convenience・決定性）は文書上明確だが、<strong>認可・課金・所有権・環境分離</strong>でデモ/暫定経路が原則を迂回している。複数領域で同一根因が独立に検出された。</p>
+
+<div class="cards">
+<div class="card crit"><div class="n">1</div><div class="l">Critical（横断）</div></div>
+<div class="card high"><div class="n">12+</div><div class="l">High（領域別）</div></div>
+<div class="card ok"><div class="n">193</div><div class="l">pytest passed</div></div>
+<div class="card ok"><div class="n">97/89%</div><div class="l">C0 / C1</div></div>
+</div>
+
+<h2>最優先アクション（重複統合）</h2>
+<table>
+<thead><tr><th>優先</th><th>テーマ</th><th>代表 ID</th><th>領域</th></tr></thead>
+<tbody>
+<tr><td class="sev sev-crit">Critical</td><td>POST /billing/sync で Entitlement 自己付与</td><td>SPEC-001, BE-001, BF-001</td><td>課金・API</td></tr>
+<tr><td class="sev sev-high">High</td><td>他ユーザー mech/tactic のチーム・ランク戦利用</td><td>BE-002, BT-001, BF-002</td><td>認可</td></tr>
+<tr><td class="sev sev-high">High</td><td>非公開戦術の無認証取得・simulate</td><td>BE-003, BT-002</td><td>認可</td></tr>
+<tr><td class="sev sev-high">High</td><td>PMB_ENV 未実装で /app・デモ API が production でも有効</td><td>SPEC-002, SEC-001, SEC-010</td><td>環境</td></tr>
+<tr><td class="sev sev-high">High</td><td>画像の無認証公開・入力上限なし</td><td>CAP-ML-001, CAP-ML-002</td><td>撮影・ML</td></tr>
+<tr><td class="sev sev-high">High</td><td>EN 不足 fallback が無料実行</td><td>BT-003, SPEC-004</td><td>バトル</td></tr>
+<tr><td class="sev sev-high">High</td><td>release ビルドに local HTTP URL 既定・CI release 欠如</td><td>ME-001, ME-002, ME-003, SPEC-007</td><td>モバイル</td></tr>
+<tr><td class="sev sev-high">High</td><td>Python pytest が CI merge gate でない</td><td>TCI-001</td><td>CI</td></tr>
+</tbody>
+</table>
+
+<h2>領域別レポート</h2>
+<ul class="links">
+<li><a href="01-spec-consistency.md">01 仕様横断整合性</a> — 18件 (C1/H6/M8/L3)</li>
+<li><a href="02-backend-api.md">02 バックエンド API</a> — 13件 (C1/H6/M5/L1)</li>
+<li><a href="03-battle-tactics.md">03 バトル・戦術</a> — 13件 (H6/M7)</li>
+<li><a href="04-capture-ml.md">04 撮影・ML</a> — 10件 (H6/M4)</li>
+<li><a href="05-mobile-environments.md">05 モバイル・環境</a> — 17件 (H3/M9/L5)</li>
+<li><a href="06-tests-ci.md">06 テスト・CI</a> — 7件 (H2/M4/L1)</li>
+<li><a href="07-security.md">07 セキュリティ設計</a> — 32件 (C1/H12/M13/L6)</li>
+<li><a href="08-billing-fairness.md">08 課金・公平性</a> — 11件 (C1/H6/M4)</li>
+<li><a href="09-roadmap-scope.md">09 ロードマップ</a> — 11件 (C1/H4/M5/L1)</li>
+<li><a href="10-security-diff.md">10 差分セキュリティ</a> — Medium+ 0件</li>
+</ul>
+
+<h2>問題なしと確認した点</h2>
+<div class="callout good">
+<ul>
+<li>ローカル pytest 193 成功、C0 97.2% / C1 89.3%（AGENTS 閾値超過）</li>
+<li>バトル seed 固定・スロット順・ダメージ式の基本回帰テストあり</li>
+<li>ブランチ差分（SQLite 永続化・android_dev.sh）に Medium+ の新規脆弱性なし</li>
+<li>Android debug cleartext は overlay 限定。Pay to Convenience 原則は仕様に明記</li>
+</ul>
+</div>
+
+<h2>計画・文書上の論点</h2>
+<ul>
+<li>Phase 2 完了マーカーがモバイル未実装を反映していない (RMS-PLAN-001)</li>
+<li>自然言語戦術が MVP と Phase 3 に二重所属 (RMS-SPEC-002)</li>
+<li>docs/07 が実装済みログ/Webhook に追従していない (SPEC-010, RMS-SPEC-004)</li>
+</ul>
+
+<footer>
+生成: オーケストレータ（10 サブエージェント + 差分セキュリティレビュー）。件数は領域別レポートの合算であり、同一根因は上表で統合表示。
+</footer>
+</main>
+</body>
+</html>

@@ -26,7 +26,8 @@ python -m uvicorn photo_mecha_battle.api.app:app --reload --port 8000
 
 ## データ
 
-- 永続化先は `data/`（gitignore 済み: SQLite + メディアファイル）。状態をリセットしたければ `data/` を削除してよい（開発用データのみ、復元不要）。
+- 永続化先は `data/`（gitignore 済み: SQLite `pmb.sqlite3` + メディアファイル）。状態をリセットしたければ `data/` を削除してよい（開発用データのみ、復元不要）。
+- DB パスは環境変数 `PMB_DB_PATH`（未設定時は `data/pmb.sqlite3`）。
 
 ## スモーク確認の順序（コアループ）
 
