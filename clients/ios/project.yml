@@ -1,0 +1,24 @@
+# XcodeGen 定義。CI / ローカルで `xcodegen generate` により .xcodeproj を生成する。
+name: PhotoMechaBattle
+options:
+  bundleIdPrefix: com.photomecha
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  PhotoMechaCore:
+    path: PhotoMechaCore
+targets:
+  PhotoMechaBattle:
+    type: application
+    platform: iOS
+    sources:
+      - PhotoMechaBattle
+    dependencies:
+      - package: PhotoMechaCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.photomecha.battle
+        INFOPLIST_FILE: PhotoMechaBattle/Info.plist
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGNING_ALLOWED: "NO"

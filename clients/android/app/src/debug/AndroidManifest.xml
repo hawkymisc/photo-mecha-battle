@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 開発用: LAN 上の uvicorn (http) へ接続するため debug ビルドのみ平文を許可 -->
+    <application
+        android:usesCleartextTraffic="true"
+        tools:ignore="MissingApplicationIcon" />
+</manifest>

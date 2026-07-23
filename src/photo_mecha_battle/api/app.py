@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from photo_mecha_battle.api.database import Database, UserRow
-from photo_mecha_battle.api.game_store import GameStore, QuotaExceededError
+from photo_mecha_battle.api.db_path import resolve_db_path
+from photo_mecha_battle.api.game_store import (
+    FeatureMismatchError,
+    GameStore,
+    QuotaExceededError,
+    ResourceAccessError,
+)
 from photo_mecha_battle.api.store import build_demo_cpu_team
+from photo_mecha_battle.features import FEATURES_ALGO_VERSION, FeatureVector
 from photo_mecha_battle.models import MechForm, Position
 from photo_mecha_battle.tactics import (
     PRESET_LABELS,
@@ -24,7 +32,10 @@ from photo_mecha_battle.tactics import (
 )
 
 DATA_DIR = Path(os.environ.get("PMB_DATA_DIR", "data"))
-store = GameStore(db=Database(":memory:"), data_dir=DATA_DIR)
+# docs/12: 既定はファイル SQLite（{PMB_DATA_DIR}/pmb.sqlite3）。PMB_DB_PATH で上書き可。
+# テストは conftest.fresh_game_store が :memory: に差し替える。
+_DB_PATH = resolve_db_path(ensure_parent=True)
+store = GameStore(db=Database(str(_DB_PATH)), data_dir=DATA_DIR)
 app = FastAPI(title="Photo Mecha Battle API", version="0.3.0")
 app.mount("/media", StaticFiles(directory=str(store.image_storage.root)), name="media")
 
@@ -98,6 +109,32 @@ class MechCreateRequest(BaseModel):
     # PLAN D-013: 型はサーバー推定で確定する（docs/03 form_inference/1.0）。
     # 後方互換のため form を受理はするが、値は無視して常にサーバー推定で上書きする。
     form: MechForm | None = None
+
+
+class MechDirectCreateRequest(BaseModel):
+    """docs/09 主経路: クライアント厚め構成の 1 リクエストメカ登録の JSON パート。
+
+    `form` は受け付けない（送られてもモデル定義に無いため無視され、サーバー推定が正）。
+    """
+
+    name: str
+    algo_version: str
+    bbox: list[float] | None = None
+    features: dict[str, float]
+
+    @field_validator("bbox")
+    @classmethod
+    def _validate_bbox(cls, value: list[float] | None) -> list[float] | None:
+        if value is None:
+            return value
+        if (
+            len(value) != 4
+            or not all(0.0 <= coord <= 1.0 for coord in value)
+            or value[0] >= value[2]
+            or value[1] >= value[3]
+        ):
+            raise ValueError("bbox must be [x1, y1, x2, y2] normalized to 0.0-1.0 with x1 < x2, y1 < y2")
+        return value
 
 
 class TacticSlotRequest(BaseModel):
@@ -180,16 +217,19 @@ def _team_slots_to_row(user_id: str, name: str, slots: list[TeamSlotConfig]):
     by_position = {slot.position: slot for slot in slots}
     if set(by_position) != {Position.FRONT, Position.MIDDLE, Position.BACK}:
         raise HTTPException(status_code=400, detail="team must include front, middle, and back")
-    return store.create_team(
-        user_id=user_id,
-        name=name,
-        front_mech_id=by_position[Position.FRONT].mech_id,
-        front_tactic_id=by_position[Position.FRONT].tactic_id,
-        middle_mech_id=by_position[Position.MIDDLE].mech_id,
-        middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
-        back_mech_id=by_position[Position.BACK].mech_id,
-        back_tactic_id=by_position[Position.BACK].tactic_id,
-    )
+    try:
+        return store.create_team(
+            user_id=user_id,
+            name=name,
+            front_mech_id=by_position[Position.FRONT].mech_id,
+            front_tactic_id=by_position[Position.FRONT].tactic_id,
+            middle_mech_id=by_position[Position.MIDDLE].mech_id,
+            middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
+            back_mech_id=by_position[Position.BACK].mech_id,
+            back_tactic_id=by_position[Position.BACK].tactic_id,
+        )
+    except ResourceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @app.post("/auth/register")
@@ -263,8 +303,91 @@ def analyze_object(object_id: str, game_store: GameStore = Depends(get_store)):
     return analysis
 
 
+async def _create_mech_direct(request: Request, user: UserRow, game_store: GameStore):
+    """docs/09 主経路: multipart（`payload` JSON + `crop` 画像）でのメカ直登録。"""
+    form = await request.form()
+    payload_raw = form.get("payload")
+    crop_part = form.get("crop")
+    if payload_raw is None or crop_part is None or isinstance(crop_part, str):
+        raise HTTPException(
+            status_code=400,
+            detail="multipart request must include 'payload' (JSON string) and 'crop' (image file)",
+        )
+    try:
+        payload_text = payload_raw if isinstance(payload_raw, str) else (await payload_raw.read()).decode("utf-8")
+        payload = MechDirectCreateRequest.model_validate(json.loads(payload_text))
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail=f"invalid payload: {exc}") from exc
+    try:
+        client_features = FeatureVector(**payload.features)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"invalid features: {exc}") from exc
+
+    crop_bytes = await crop_part.read()
+    if not crop_bytes:
+        raise HTTPException(status_code=400, detail="empty crop file")
+
+    try:
+        return game_store.create_mech_direct(
+            user.id,
+            payload.name,
+            payload.algo_version,
+            payload.bbox,
+            client_features,
+            crop_bytes,
+        )
+    except FeatureMismatchError as exc:
+        # docs/09 信頼モデル: 差分が閾値超なら reject（クライアント実装ずれの検出を優先し、
+        # 黙ってサーバー値で上書きしない）。
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "feature_mismatch",
+                "dimension": exc.dimension,
+                "client": exc.client_value,
+                "server": exc.server_value,
+                "tolerance": exc.tolerance,
+            },
+        ) from exc
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=f"{exc.resource} quota exceeded") from exc
+    except ValueError as exc:
+        message = str(exc)
+        if message == "duplicate_capture":
+            raise HTTPException(status_code=409, detail="duplicate capture") from exc
+        if message.startswith("unsafe_capture:"):
+            reason = message.split(":", 1)[1]
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "unsafe_capture", "reason": reason, "action": "recapture"},
+            ) from exc
+        if message.startswith("unsupported_algo_version:"):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "unsupported_algo_version",
+                    "sent": message.split(":", 1)[1],
+                    "supported": [FEATURES_ALGO_VERSION],
+                },
+            ) from exc
+        if message.startswith("invalid_image:"):
+            raise HTTPException(status_code=400, detail="crop is not a decodable image") from exc
+        raise HTTPException(status_code=400, detail=message) from exc
+
+
 @app.post("/mechs")
-def create_mech(body: MechCreateRequest, user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
+async def create_mech(request: Request, user: UserRow = Depends(require_user), game_store: GameStore = Depends(get_store)):
+    # docs/09: multipart は本番モバイルの主経路（crop + features 直登録）、JSON はサーバー側
+    # パイプライン（object_id 参照）の互換経路。Content-Type で分岐する。
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("multipart/form-data"):
+        return await _create_mech_direct(request, user, game_store)
+
+    try:
+        body = MechCreateRequest.model_validate(await request.json())
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail=f"invalid request body: {exc}") from exc
+
     extracted = game_store.db.get_extracted_object(body.object_id)
     if body.object_id not in game_store.objects and extracted is None:
         raise HTTPException(status_code=404, detail="object not found")
@@ -286,20 +409,17 @@ def list_mechs(user: UserRow = Depends(require_user), game_store: GameStore = De
 
 
 @app.get("/mechs/{mech_id}")
-def get_mech(mech_id: str, game_store: GameStore = Depends(get_store)):
+def get_mech(
+    mech_id: str,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
     record = game_store.get_persisted_mech(mech_id)
     if record is None:
-        legacy = game_store.mechs.get(mech_id)
-        if legacy is None:
-            raise HTTPException(status_code=404, detail="mech not found")
-        mech = legacy.mech
-        return {
-            "id": legacy.id,
-            "object_id": legacy.object_id,
-            "name": mech.name,
-            "form": mech.form.value,
-            "stats": mech.stats.__dict__,
-        }
+        # 所有者が紐づかないレガシー in-memory メカは公開しない（BE-003）。
+        raise HTTPException(status_code=404, detail="mech not found")
+    if record["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
     return record
 
 
@@ -328,10 +448,16 @@ def create_tactic(body: TacticCreateRequest, user: UserRow = Depends(require_use
 
 
 @app.get("/tactics/{tactic_id}")
-def get_tactic(tactic_id: str, game_store: GameStore = Depends(get_store)):
+def get_tactic(
+    tactic_id: str,
+    user: UserRow = Depends(require_user),
+    game_store: GameStore = Depends(get_store),
+):
     row = game_store.db.get_tactic(tactic_id)
     if row is None:
         raise HTTPException(status_code=404, detail="tactic not found")
+    if row["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
     return {"id": row["id"], **row["payload"]}
 
 
@@ -360,10 +486,19 @@ class TacticSimulateRequest(BaseModel):
 def simulate_tactic(
     tactic_id: str,
     body: TacticSimulateRequest,
+    user: UserRow = Depends(require_user),
     game_store: GameStore = Depends(get_store),
 ):
-    if game_store.db.get_tactic(tactic_id) is None:
+    tactic_row = game_store.db.get_tactic(tactic_id)
+    if tactic_row is None:
         raise HTTPException(status_code=404, detail="tactic not found")
+    if tactic_row["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
+    mech_row = game_store.db.get_mech(body.mech_id)
+    if mech_row is None:
+        raise HTTPException(status_code=404, detail=f"mech not found: {body.mech_id}")
+    if mech_row["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
     try:
         result = game_store.simulate_tactic(tactic_id, body.mech_id, body.seed)
     except ValueError as exc:
@@ -401,17 +536,20 @@ def update_team(
     by_position = {slot.position: slot for slot in body.slots}
     if set(by_position) != {Position.FRONT, Position.MIDDLE, Position.BACK}:
         raise HTTPException(status_code=400, detail="team must include front, middle, and back")
-    team = game_store.update_team(
-        team_id=team_id,
-        user_id=user.id,
-        name=body.name,
-        front_mech_id=by_position[Position.FRONT].mech_id,
-        front_tactic_id=by_position[Position.FRONT].tactic_id,
-        middle_mech_id=by_position[Position.MIDDLE].mech_id,
-        middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
-        back_mech_id=by_position[Position.BACK].mech_id,
-        back_tactic_id=by_position[Position.BACK].tactic_id,
-    )
+    try:
+        team = game_store.update_team(
+            team_id=team_id,
+            user_id=user.id,
+            name=body.name,
+            front_mech_id=by_position[Position.FRONT].mech_id,
+            front_tactic_id=by_position[Position.FRONT].tactic_id,
+            middle_mech_id=by_position[Position.MIDDLE].mech_id,
+            middle_tactic_id=by_position[Position.MIDDLE].tactic_id,
+            back_mech_id=by_position[Position.BACK].mech_id,
+            back_tactic_id=by_position[Position.BACK].tactic_id,
+        )
+    except ResourceAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return {"id": team.id, "name": team.name}
 
 
@@ -586,11 +724,13 @@ def update_entitlement(
 
 @app.post("/billing/sync")
 def sync_billing(
-    body: BillingSyncRequest,
     user: UserRow = Depends(require_user),
     game_store: GameStore = Depends(get_store),
+    body: BillingSyncRequest | None = None,
 ):
-    return game_store.sync_client_entitlements(user.id, body.active_entitlements)
+    # body は後方互換のため受け付けるが、active_entitlements は権威にしない（BE-001 / BF-001）。
+    _ = body
+    return game_store.sync_client_entitlements(user.id)
 
 
 @app.post("/billing/revenuecat/webhook")

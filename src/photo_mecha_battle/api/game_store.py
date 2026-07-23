@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from io import BytesIO
 from pathlib import Path
 
+from PIL import Image
+
 from photo_mecha_battle.api.capture_pipeline import (
+    DUPLICATE_HASH_DISTANCE,
+    PENALIZED_INFO_SCORE_CAP,
+    SCORE_PENALIZED_SAFETY_REASONS,
     create_capture_from_bytes,
     detect_for_capture,
     segment_for_capture,
@@ -15,18 +21,48 @@ from photo_mecha_battle.api.limits import limits_for_user
 from photo_mecha_battle.api.store import InMemoryStore, CaptureRecord, ObjectRecord, build_demo_cpu_team
 from photo_mecha_battle.battle import BattleEngine, BattleResult
 from photo_mecha_battle.battle_log_serde import battle_log_to_payload
-from photo_mecha_battle.features import FeatureVector
-from photo_mecha_battle.mech_stats import FORM_INFERENCE_VERSION
+from photo_mecha_battle.features import FEATURES_ALGO_VERSION, FeatureVector
+from photo_mecha_battle.mech_stats import FORM_INFERENCE_VERSION, compute_info_score
 from photo_mecha_battle.models import Mech, MechForm, MechStats, Position, Team, TeamSlot
 from photo_mecha_battle.tactics import TacticSet
 from photo_mecha_battle.tactics_serde import tactic_set_from_payload, tactic_set_to_payload
+from photo_mecha_battle.vision.analysis import (
+    MASK_FOREGROUND_THRESHOLD,
+    analyze_rgba_crop,
+    assess_capture_safety,
+    hamming_distance,
+    perceptual_hash,
+)
 from photo_mecha_battle.vision.mech_art import render_mech_art
+from photo_mecha_battle.vision.segmentation import image_to_png_bytes
 
 
 class QuotaExceededError(Exception):
     def __init__(self, resource: str) -> None:
         self.resource = resource
         super().__init__(f"quota exceeded: {resource}")
+
+
+class ResourceAccessError(Exception):
+    """所有権・存在チェック失敗（API 層で HTTP ステータスへ写像する）。"""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(detail)
+
+
+class FeatureMismatchError(Exception):
+    """docs/09 信頼モデル: クライアント申告特徴量とサーバー再計算値の差分が閾値を超えた。"""
+
+    def __init__(self, dimension: str, client_value: float, server_value: float, tolerance: float) -> None:
+        self.dimension = dimension
+        self.client_value = client_value
+        self.server_value = server_value
+        self.tolerance = tolerance
+        super().__init__(
+            f"feature mismatch: {dimension} client={client_value:.4f} server={server_value:.4f} tolerance={tolerance}"
+        )
 
 
 class GameStore:
@@ -158,6 +194,130 @@ class GameStore:
         response["art_url"] = art_url
         return response
 
+    # docs/09 信頼モデル: クライアント申告 feature_vector とサーバー再計算値の許容差分 ε。
+    DIRECT_FEATURE_TOLERANCE = 0.05
+    # docs/09 信頼モデル「最小解像度」: これ未満の crop は特徴量が不安定なため再撮影を促す。
+    MIN_CROP_DIMENSION = 64
+
+    @staticmethod
+    def _is_solid_color_foreground(canonical: Image.Image) -> bool:
+        """docs/09 信頼モデル「極端な単色画像の拒否」: 前景が実質 1 色なら True。
+
+        補間で中間色が混ざらないよう、リサイズせず正規形の画素を直接数える。
+        """
+        colors = {
+            (r, g, b)
+            for r, g, b, a in canonical.getdata()
+            if a >= MASK_FOREGROUND_THRESHOLD
+        }
+        return len(colors) <= 1
+
+    def create_mech_direct(
+        self,
+        user_id: str,
+        name: str,
+        algo_version: str,
+        bbox: list[float] | None,
+        client_features: FeatureVector,
+        crop_bytes: bytes,
+    ) -> dict[str, object]:
+        """docs/09 主経路: crop + features を 1 リクエストで受け取りメカを確定する。
+
+        検証順序は `/captures/upload` と揃える:
+        クォータ事前確認 → phash 重複 → 安全性ゲート → 特徴量再計算・差分検証 →
+        永続化（capture / extracted_object / mech）→ クォータ消費。
+        """
+        if algo_version != FEATURES_ALGO_VERSION:
+            raise ValueError(f"unsupported_algo_version:{algo_version}")
+        self._ensure_capture_quota(user_id)
+        self._ensure_mech_quota(user_id)
+
+        try:
+            crop = Image.open(BytesIO(crop_bytes)).convert("RGBA")
+        except Exception as exc:
+            raise ValueError(f"invalid_image:{exc}") from exc
+
+        # 透明領域に残った不可視 RGB が phash・安全性判定・特徴量に影響しないよう、
+        # 以降はすべて正規形（背景ゼロ化済み crop）に対して行う（docs/09 信頼モデル）。
+        analysis = analyze_rgba_crop(crop)
+        canonical = analysis.canonical
+        mask = analysis.mask
+        background_mix = analysis.background_mix
+        server_features = analysis.features
+
+        # docs/09 信頼モデル「最小解像度、極端な単色画像の拒否」+ マスク空チェック。
+        # いずれも安全性ゲートと同じ「再撮影」導線のエラー種別で返す。
+        if min(canonical.width, canonical.height) < self.MIN_CROP_DIMENSION:
+            raise ValueError("unsafe_capture:crop_too_small")
+        if analysis.foreground_ratio <= 0.0:
+            raise ValueError("unsafe_capture:empty_mask")
+        if self._is_solid_color_foreground(canonical):
+            raise ValueError("unsafe_capture:solid_color_crop")
+
+        phash = perceptual_hash(canonical)
+        for existing in self.db.list_capture_hashes(user_id):
+            if hamming_distance(phash, existing) <= DUPLICATE_HASH_DISTANCE:
+                raise ValueError("duplicate_capture")
+
+        safety_status, safety_reason = assess_capture_safety(canonical, phash)
+        if safety_status == "blocked":
+            raise ValueError(f"unsafe_capture:{safety_reason}")
+
+        for dimension, server_value in server_features.__dict__.items():
+            client_value = getattr(client_features, dimension)
+            if abs(client_value - server_value) > self.DIRECT_FEATURE_TOLERANCE:
+                raise FeatureMismatchError(dimension, client_value, server_value, self.DIRECT_FEATURE_TOLERANCE)
+
+        info_score = compute_info_score(server_features)
+        if safety_reason in SCORE_PENALIZED_SAFETY_REASONS:
+            info_score = min(info_score, PENALIZED_INFO_SCORE_CAP)
+
+        capture_id = str(uuid.uuid4())
+        saved_capture = self.image_storage.save_capture(user_id, crop_bytes, ".png")
+        self.db.save_capture(
+            capture_id=capture_id,
+            user_id=user_id,
+            original_path=str(saved_capture),
+            perceptual_hash=phash,
+            safety_status=safety_status,
+            quality_json={"safety_reason": safety_reason} if safety_reason else {},
+        )
+
+        object_id = str(uuid.uuid4())
+        # 以降の art 生成・再検証は正規形 crop を正とする（不可視 RGB を持ち込まない）。
+        crop_path = self.image_storage.save_crop(object_id, image_to_png_bytes(canonical))
+        mask_path = self.image_storage.save_mask(object_id, image_to_png_bytes(mask))
+        mask_confidence = min(0.98, 0.5 + analysis.foreground_ratio)
+        self.db.save_extracted_object(
+            object_id=object_id,
+            capture_id=capture_id,
+            bbox_json=bbox or [0.0, 0.0, 1.0, 1.0],
+            mask_path=str(mask_path),
+            crop_path=str(crop_path),
+            features_json=server_features.__dict__,
+            info_score=info_score,
+            detected_label="client_direct",
+            confidence=mask_confidence,
+            quality_json={"background_mix": background_mix},
+            safety_status=safety_status,
+        )
+        self._session.objects[object_id] = ObjectRecord(
+            id=object_id,
+            capture_id=capture_id,
+            features=server_features,
+            info_score=info_score,
+        )
+
+        # capture クォータはメカ確定が成功してから消費する。途中失敗時に
+        # 「枠だけ消費してメカ未作成」となる不整合を避ける（レビュー指摘 M4）。
+        response = self.create_mech_for_user(user_id, object_id, name)
+        self.db.increment_quota(user_id, "captures_used")
+        # docs/09: サーバー確定値をクライアントに返す（クライアントプレビューと異なる場合がある）。
+        response["features"] = server_features.__dict__
+        response["info_score"] = info_score
+        response["algo_version"] = FEATURES_ALGO_VERSION
+        return response
+
     def _render_and_store_art(self, mech_id: str, object_id: str, form: MechForm) -> str | None:
         extracted = self.db.get_extracted_object(object_id)
         if extracted is None or not extracted.get("crop_path"):
@@ -221,6 +381,26 @@ class GameStore:
         cpu_team, cpu_tactics = build_demo_cpu_team()
         return BattleEngine().simulate(player_team, player_tactics, cpu_team, cpu_tactics, seed=seed)
 
+    def _assert_owned_team_refs(
+        self,
+        user_id: str,
+        mech_ids: list[str],
+        tactic_ids: list[str],
+    ) -> None:
+        """docs/07 所有権: チームが参照するメカ・戦術は呼出ユーザー所有であること。"""
+        for mech_id in mech_ids:
+            row = self.db.get_mech(mech_id)
+            if row is None:
+                raise ResourceAccessError(404, f"mech not found: {mech_id}")
+            if row["user_id"] != user_id:
+                raise ResourceAccessError(403, "forbidden")
+        for tactic_id in tactic_ids:
+            row = self.db.get_tactic(tactic_id)
+            if row is None:
+                raise ResourceAccessError(404, f"tactic not found: {tactic_id}")
+            if row["user_id"] != user_id:
+                raise ResourceAccessError(403, "forbidden")
+
     def create_team(
         self,
         user_id: str,
@@ -232,6 +412,11 @@ class GameStore:
         back_mech_id: str,
         back_tactic_id: str,
     ) -> TeamRow:
+        self._assert_owned_team_refs(
+            user_id,
+            [front_mech_id, middle_mech_id, back_mech_id],
+            [front_tactic_id, middle_tactic_id, back_tactic_id],
+        )
         team = TeamRow(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -258,6 +443,11 @@ class GameStore:
         back_mech_id: str,
         back_tactic_id: str,
     ) -> TeamRow:
+        self._assert_owned_team_refs(
+            user_id,
+            [front_mech_id, middle_mech_id, back_mech_id],
+            [front_tactic_id, middle_tactic_id, back_tactic_id],
+        )
         team = TeamRow(
             id=team_id,
             user_id=user_id,
@@ -363,16 +553,13 @@ class GameStore:
     )
     _REVOKE_EVENT_TYPES = frozenset({"CANCELLATION", "EXPIRATION"})
 
-    def sync_client_entitlements(self, user_id: str, active_keys: list[str]) -> dict[str, object]:
-        """docs/07 POST /billing/sync: クライアントの CustomerInfo とサーバー状態の同期。
+    def sync_client_entitlements(self, user_id: str) -> dict[str, object]:
+        """docs/07 POST /billing/sync: サーバー保持の Entitlement を再読込して返す。
 
-        RevenueCat Webhook が権威ソースであり、これはWebhook未達時のフォールバック
-        （docs/08 リスク対策）。既知のEntitlementキーのみを反映し、クライアント申告を
-        そのまま鵜呑みにして未知の権限を付与することはない。
+        RevenueCat Webhook / 管理者デモ付与が権威ソース。クライアント申告の
+        `active_entitlements` は書き込みに使わない（監査 BE-001 / BF-001）。
+        RevenueCat サーバー API 照会が未実装のため、検証不能な自己付与経路は fail-closed。
         """
-        active_set = {key for key in active_keys if key in self.KNOWN_ENTITLEMENT_KEYS}
-        for key in self.KNOWN_ENTITLEMENT_KEYS:
-            self.db.set_entitlement(user_id, key, key in active_set)
         return {"entitlements": self.db.get_entitlements(user_id)}
 
     def apply_revenuecat_event(

@@ -6,5 +6,6 @@ coverage.json
 .venv/
 dist/
 *.egg-info/
-data/
+/data/
 artifacts/
+.tooling/

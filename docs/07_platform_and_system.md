@@ -44,6 +44,7 @@
 - 全体構成図・責務分担 → [`docs/09`](09_lightweight_server_architecture.md) 「全体構成」「責務分担」
 - API 一覧（主経路・互換用の区別含む）→ [`docs/09`](09_lightweight_server_architecture.md) 「API 設計」
 - 信頼モデル（クライアント算出値の検証）→ [`docs/09`](09_lightweight_server_architecture.md) 「信頼モデル」
+- 環境分離（local / staging / production）→ [`docs/12`](12_environments.md)
 
 ## 認証（MVP）
 
@@ -68,6 +69,7 @@ FastAPI 標準の `{"detail": "..."}` 形式とする。
 | 403 | 他ユーザーのリソースへのアクセス |
 | 404 | リソース不存在 |
 | 409 | 重複撮影（perceptual hash 判定。[`docs/02`](02_photo_object_extraction.md)） |
+| 422 | 検証拒否（`unsafe_capture` / `feature_mismatch` / `unsupported_algo_version`。[`docs/09`](09_lightweight_server_architecture.md)） |
 | 429 | 日次クォータ超過（[`docs/06`](06_monetization_and_fairness.md)） |
 
 ### 所有権
@@ -199,4 +201,5 @@ RevenueCat Webhook の本実装時（Phase 3）に追加する。
 - クライアント: SDK 初期化、App User ID とアプリ内ユーザー ID の紐づけ、Offerings 取得、
   Paywall 表示、購入、購入復元、CustomerInfo 取得、Entitlement に応じた機能解放
 - バックエンド: Webhook 受信 → `user_entitlements` 同期。クライアントだけで課金状態を確定しない
+- `POST /billing/sync` はサーバー保持状態の再読込のみ。クライアントの `active_entitlements` 申告で付与・失効しない（RevenueCat サーバー API 照会が実装されるまでは fail-closed）
 - ランク戦での戦術条件・行動・スロット数は Entitlement に依存させない
