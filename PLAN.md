@@ -5,7 +5,7 @@
 | Status | ID | Task | Notes |
 |---|---|---|---|
 | ⚠️ | P0-001 | モバイル向け軽量画像生成 AI 調査 | 完了: [`docs/10`](docs/10_mobile_image_generation_survey.md)。PO 決定待ち: `generation_model_choice` |
-| 🔲 | P0-002 | SD 1.5 + mecha LoRA 試作（Phase 0a） | kohya_ss、鳥型 50 ペア |
+| ⚠️ | P0-002 | SD 1.5 + mecha LoRA 試作（Phase 0a） | データセット準備・kohya ラッパー完了。[`scripts/phase0/README.md`](scripts/phase0/README.md)。GPU 学習は `KOHYA_SS_DIR` ホストで実行 |
 | 🔲 | P0-003 | 端末ベンチ（Local Dream / Core ML） | RAM・速度・発熱（Phase 0b） |
 | 🔲 | P0-004 | DreamLite PoC（NC 限定） | 品質上限確認（Phase 0c） |
 | ✅ | P0-005 | `scripts/diag/diag_mech_i2i.sh` | seed 固定再現性（Phase 0d） |

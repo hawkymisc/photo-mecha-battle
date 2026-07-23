@@ -217,7 +217,7 @@ Phase 0 では **SD 1.5**（`runwayml/stable-diffusion-v1-5` または anime / m
 
 | ステップ | 内容 | 成果物 |
 |---|---|---|
-| **0a** | SD 1.5 + mecha LoRA を kohya_ss で試作（鳥型 50 ペア） | LoRA 重み、サンプル画像 |
+| **0a** | SD 1.5 + mecha LoRA を kohya_ss で試作（鳥型 50 ペア） | LoRA 重み、サンプル画像（[`scripts/phase0/README.md`](../scripts/phase0/README.md)） |
 | **0b** | Android: Local Dream、iOS: Core ML SD1.5 で img2img ベンチ | RAM / 秒数 / 発熱ログ |
 | **0c** | DreamLite で同一データ PoC（NC 限定） | 品質比較レポート |
 | **0d** | `scripts/diag/diag_mech_i2i.sh` で seed 固定再現性を記録 | 診断スクリプト出力 |
