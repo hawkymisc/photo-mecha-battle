@@ -53,6 +53,7 @@
 | Web デモ | `GET /app/` をローカルで配信してよい（本番モバイルの代替ではない） |
 
 補助スクリプト例: リポジトリの `scripts/android_dev.sh`（JDK/SDK・API ポート検出・ビルド/インストール）。
+手元のビルド・実機確認の手順まとめは [`docs/13`](13_build_and_device_verification.md)。
 
 ### `staging`（QA 共用）
 

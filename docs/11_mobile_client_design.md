@@ -29,6 +29,8 @@ clients/
   ios/       # XcodeGen プロジェクト（同上。Linux 開発環境では macOS CI でビルド検証）
 ```
 
+ビルド・エミュレータ/実機へのインストール手順は [`docs/13`](13_build_and_device_verification.md) を正とする。
+
 ## 画面一覧と遷移（Phase 1）
 
 | ID | 画面 | 主な要素 | 参照仕様 |

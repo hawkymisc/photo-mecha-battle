@@ -1,6 +1,7 @@
 # Photo Mecha Battle — Android クライアント（Phase 1 縦切り）
 
 設計は [docs/11_mobile_client_design.md](../../docs/11_mobile_client_design.md) を正本とする。
+ビルド・実機確認のまとめは [docs/13_build_and_device_verification.md](../../docs/13_build_and_device_verification.md) を参照。
 
 ## モジュール構成
 
